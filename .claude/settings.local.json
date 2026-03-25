@@ -1,0 +1,8 @@
+{
+  "permissions": {
+    "allow": [
+      "Bash(rm -rf /Users/np/Desktop/bench-watch/bench-watch/src/tasks /Users/np/Desktop/bench-watch/bench-watch/src/tags)",
+      "Bash(rm -rf /Users/np/Desktop/bench-watch/bench-watch/migrations)"
+    ]
+  }
+}

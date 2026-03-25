@@ -1,0 +1,20 @@
+# Wasp build output
+.wasp/
+
+# Database
+*.db
+*.db-journal
+
+# Dependencies
+node_modules/
+
+# Environment variables (never commit secrets)
+.env.server
+.env.client
+
+# OS
+.DS_Store
+
+# Editor
+.vscode/
+.idea/
