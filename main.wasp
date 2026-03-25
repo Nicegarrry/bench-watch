@@ -23,11 +23,17 @@ app benchWatch {
         }
       },
     },
-    onAuthSucceededRedirectTo: "/dashboard",
+    onAuthSucceededRedirectTo: "/intelligence",
     onAuthFailedRedirectTo: "/login",
   },
   emailSender: {
     provider: Dummy,
+    // TODO: switch to SendGrid or SMTP (Resend) before production
+  },
+  db: {
+    seeds: [
+      import { seedAll } from "@src/pipeline/seeds"
+    ]
   },
   client: {
     rootComponent: import { App } from "@src/App",
@@ -61,7 +67,7 @@ page EmailVerificationPage {
 }
 // #endregion Auth
 
-// #region App
+// #region App Pages
 route LandingRoute { path: "/", to: LandingPage }
 page LandingPage {
   component: import { LandingPage } from "@src/landing/LandingPage"
@@ -72,4 +78,128 @@ page DashboardPage {
   authRequired: true,
   component: import { DashboardPage } from "@src/dashboard/DashboardPage"
 }
-// #endregion App
+
+route OnboardingRoute { path: "/onboarding", to: OnboardingPage }
+page OnboardingPage {
+  authRequired: true,
+  component: import { OnboardingPage } from "@src/onboarding/OnboardingPage"
+}
+
+route ArchiveRoute { path: "/archive", to: ArchivePage }
+page ArchivePage {
+  authRequired: true,
+  component: import { ArchivePage } from "@src/archive/ArchivePage"
+}
+
+route SettingsRoute { path: "/settings", to: SettingsPage }
+page SettingsPage {
+  authRequired: true,
+  component: import { SettingsPage } from "@src/settings/SettingsPage"
+}
+
+route IntelligenceRoute { path: "/intelligence", to: IntelligencePage }
+page IntelligencePage {
+  authRequired: true,
+  component: import { IntelligencePage } from "@src/intelligence/IntelligencePage"
+}
+// #endregion App Pages
+
+// #region Jobs
+job discoveryJob {
+  executor: PgBoss,
+  perform: {
+    fn: import { runDiscovery } from "@src/pipeline/discovery"
+  },
+  schedule: {
+    cron: "0 19 * * 0",
+    executorOptions: {
+      pgBoss: {=json { "retryLimit": 2, "retryDelay": 300 } json=}
+    }
+  }
+}
+
+job triageJob {
+  executor: PgBoss,
+  perform: {
+    fn: import { runTriage } from "@src/pipeline/triage"
+  },
+  schedule: {
+    cron: "0 20 * * 0",
+    executorOptions: {
+      pgBoss: {=json { "retryLimit": 2, "retryDelay": 300 } json=}
+    }
+  }
+}
+
+job digestJob {
+  executor: PgBoss,
+  perform: {
+    fn: import { runDigests } from "@src/pipeline/userDigests"
+  },
+  schedule: {
+    cron: "0 21 * * 0",
+    executorOptions: {
+      pgBoss: {=json { "retryLimit": 1, "retryDelay": 300 } json=}
+    }
+  }
+}
+// #endregion Jobs
+
+// #region APIs
+api runDigestApi {
+  fn: import { runDigestHandler } from "@src/api/digestApi",
+  entities: [User, UserDigest, UserArea],
+  auth: true,
+  httpRoute: (POST, "/api/run-digest")
+}
+
+api getCaseAnalysisApi {
+  fn: import { getCaseAnalysisHandler } from "@src/api/caseApi",
+  entities: [CaseAnalysis, Case],
+  auth: true,
+  httpRoute: (GET, "/api/cases/:id/analysis")
+}
+
+api getArchiveApi {
+  fn: import { getArchiveHandler } from "@src/api/archiveApi",
+  entities: [UserDigest, UserDigestTopCase, UserDigestExtendedCase, Case],
+  auth: true,
+  httpRoute: (GET, "/api/archive")
+}
+
+api getAreasApi {
+  fn: import { getAreasHandler } from "@src/api/areasApi",
+  entities: [LawArea],
+  auth: false,
+  httpRoute: (GET, "/api/areas")
+}
+
+api updateUserAreasApi {
+  fn: import { updateUserAreasHandler } from "@src/api/areasApi",
+  entities: [UserArea, User, LawArea],
+  auth: true,
+  httpRoute: (POST, "/api/user/areas")
+}
+// #endregion APIs
+
+// #region Dev-only pipeline triggers (remove before production)
+action triggerDiscovery {
+  fn: import { runDiscovery } from "@src/pipeline/discovery",
+  entities: []
+}
+
+action triggerTriage {
+  fn: import { runTriage } from "@src/pipeline/triage",
+  entities: []
+}
+
+action triggerDigests {
+  fn: import { runDigests } from "@src/pipeline/userDigests",
+  entities: []
+}
+
+action setupTestUser {
+  fn: import { setupTestUser } from "@src/pipeline/devSetup",
+  entities: [User, UserArea]
+}
+// #endregion Dev-only

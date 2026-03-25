@@ -1,12 +1,26 @@
-import { Outlet } from "react-router";
-import "./App.css";
-import { Header } from "./shared/components/Header";
+import { Outlet, useLocation } from 'react-router'
+import './App.css'
+import { AppLayout } from './shared/components/AppLayout'
+
+// Routes that use the sidebar+topbar layout
+const APP_ROUTES = ['/intelligence', '/archive', '/settings', '/dashboard']
 
 export function App() {
+  const location = useLocation()
+  const useAppLayout = APP_ROUTES.some((r) => location.pathname.startsWith(r))
+
+  if (useAppLayout) {
+    return (
+      <AppLayout>
+        <Outlet />
+      </AppLayout>
+    )
+  }
+
+  // Public pages: landing, login, signup, onboarding, auth pages
   return (
-    <main className="flex min-h-screen w-full flex-col bg-neutral-50 text-neutral-800">
-      <Header />
+    <div style={{ minHeight: '100vh', backgroundColor: 'var(--surface)' }}>
       <Outlet />
-    </main>
-  );
+    </div>
+  )
 }

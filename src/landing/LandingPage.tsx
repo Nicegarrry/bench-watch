@@ -1,172 +1,215 @@
-import { Link } from "wasp/client/router";
-import type { ComponentProps } from "react";
-import { useAuth } from "wasp/client/auth";
-import { ButtonLink } from "../shared/components/Button";
+import { Link } from 'react-router'
+import { useAuth } from 'wasp/client/auth'
+import { Scale, Rss, Brain, Mail, ChevronRight } from 'lucide-react'
 
-type To = ComponentProps<typeof Link>["to"];
+const COURTS = ['HCA', 'FCAFC', 'FCA', 'NSWCA', 'NSWCCA', 'VSCA', 'QCA', 'WASCA', 'SASCFC', 'TASFC', 'ACTCA', 'NTCA', 'HCA SJ']
+const AREAS = ['Administrative', 'Constitutional', 'Contract', 'Employment', 'Criminal', 'Corporations', 'Property', 'Planning', 'Tax', 'Torts', 'IP', 'Competition', 'Migration', 'Privacy', 'Family']
 
 export function LandingPage() {
-  const { data: user } = useAuth();
+  const { data: user } = useAuth()
 
   return (
-    <div className="flex flex-col">
-      {/* Hero */}
-      <section className="flex flex-col items-center justify-center px-6 py-32 text-center">
-        <span className="mb-4 rounded-full bg-primary-100 px-4 py-1 text-sm font-semibold text-primary-700">
-          Now in beta
-        </span>
-        <h1 className="mb-6 max-w-3xl text-5xl font-bold leading-tight text-neutral-900">
-          The smarter way to{" "}
-          <span className="text-primary-500">watch your benchmarks</span>
-        </h1>
-        <p className="mb-10 max-w-xl text-lg text-neutral-500">
-          Track, compare, and get alerted on performance regressions before they
-          ship. Built for engineering teams who care about speed.
-        </p>
-        <div className="flex gap-4">
+    <div style={{ fontFamily: 'var(--font-sans)', color: 'var(--on-surface)' }}>
+      {/* Nav */}
+      <nav style={{ position: 'fixed', top: 0, left: 0, right: 0, zIndex: 100, backgroundColor: 'rgba(251,249,246,0.92)', backdropFilter: 'blur(8px)', padding: '0 40px', height: '60px', display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
+        <p style={{ fontFamily: 'var(--font-sans)', fontSize: '18px', fontWeight: 700, color: 'var(--on-surface)', margin: 0 }}>BenchWatch</p>
+        <div style={{ display: 'flex', gap: '16px', alignItems: 'center' }}>
           {user ? (
-            <ButtonLink to="/dashboard">Go to Dashboard</ButtonLink>
+            <NavLink href="/intelligence">Dashboard →</NavLink>
           ) : (
             <>
-              <ButtonLink to="/signup">Get started free</ButtonLink>
-              <ButtonLink to="/login" variant="ghost">
-                Sign in
-              </ButtonLink>
+              <NavLink href="/login">Sign In</NavLink>
+              <Link to="/signup" style={{ padding: '8px 20px', backgroundColor: 'var(--primary-container)', color: '#fff', borderRadius: 'var(--rounded-md)', fontWeight: 600, fontSize: '14px', textDecoration: 'none' }}>
+                Get Started Free
+              </Link>
             </>
           )}
         </div>
+      </nav>
+
+      {/* Hero */}
+      <section style={{ background: 'linear-gradient(160deg, var(--primary) 0%, var(--primary-container) 60%, #2d3561 100%)', paddingTop: '140px', paddingBottom: '100px', textAlign: 'center', padding: '140px 40px 100px' }}>
+        <p className="label-md" style={{ color: 'var(--secondary)', marginBottom: '20px' }}>
+          AUSTRALIAN APPELLATE COURTS · 13 FEEDS · WEEKLY
+        </p>
+        <h1 className="display-lg" style={{ color: '#ffffff', margin: '0 auto 24px', maxWidth: '760px' }}>
+          Australian Case Law Intelligence, Weekly
+        </h1>
+        <p className="body-lg" style={{ color: 'rgba(255,255,255,0.7)', maxWidth: '560px', margin: '0 auto 40px' }}>
+          BenchWatch monitors every major appellate court, identifies significant decisions with AI, and delivers a personalised digest to your inbox every week.
+        </p>
+        <div style={{ display: 'flex', gap: '16px', justifyContent: 'center', flexWrap: 'wrap' }}>
+          <Link to="/signup" style={{ padding: '14px 32px', backgroundColor: 'var(--secondary-container)', color: '#fff', borderRadius: 'var(--rounded-md)', fontWeight: 700, fontSize: '15px', textDecoration: 'none' }}>
+            Get Started Free
+          </Link>
+          <Link to={user ? '/intelligence' : '/login'} style={{ padding: '14px 32px', border: '1.5px solid rgba(255,255,255,0.4)', color: '#fff', borderRadius: 'var(--rounded-md)', fontWeight: 600, fontSize: '15px', textDecoration: 'none' }}>
+            Try the Dashboard
+          </Link>
+        </div>
       </section>
 
-      {/* Features */}
-      <section className="border-t border-neutral-200 bg-white py-24">
-        <div className="mx-auto max-w-screen-lg px-6">
-          <h2 className="mb-12 text-center text-3xl font-bold text-neutral-900">
-            Everything you need to stay fast
-          </h2>
-          <div className="grid gap-8 md:grid-cols-3">
-            <FeatureCard
-              icon="⚡"
-              title="Real-time tracking"
-              description="Benchmark results synced automatically on every CI run. No manual uploads."
-            />
-            <FeatureCard
-              icon="📊"
-              title="Visual comparisons"
-              description="Side-by-side charts across branches, commits, and time ranges."
-            />
-            <FeatureCard
-              icon="🔔"
-              title="Smart alerts"
-              description="Get notified on Slack or email when a metric regresses beyond your threshold."
-            />
+      {/* How it works */}
+      <section style={{ maxWidth: '960px', margin: '0 auto', padding: '100px 40px' }}>
+        <p className="label-sm" style={{ color: 'var(--secondary-container)', marginBottom: '12px', textAlign: 'center' }}>HOW IT WORKS</p>
+        <h2 className="headline-md" style={{ textAlign: 'center', margin: '0 0 60px' }}>Three steps, every week</h2>
+        <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(260px, 1fr))', gap: '32px' }}>
+          {[
+            { icon: <Rss size={24} />, step: '01', title: 'Court Monitoring', body: 'We poll 13 JADE RSS feeds every Sunday morning, capturing every appellate decision from the past 7 days.' },
+            { icon: <Brain size={24} />, step: '02', title: 'AI Significance Triage', body: 'Claude Sonnet scores each case for legal significance, tags it by practice area, and writes a full analysis for the cases that matter.' },
+            { icon: <Mail size={24} />, step: '03', title: 'Personalised Digest', body: 'We rank and select the cases most relevant to your practice areas and deliver your Priority Insights each week.' },
+          ].map((item) => (
+            <div key={item.step} style={{ padding: '32px', backgroundColor: 'var(--surface-container-lowest)', borderRadius: 'var(--rounded-lg)' }}>
+              <div style={{ color: 'var(--secondary-container)', marginBottom: '16px' }}>{item.icon}</div>
+              <p className="label-sm" style={{ color: 'var(--secondary-container)', marginBottom: '8px' }}>STEP {item.step}</p>
+              <h3 className="title-md" style={{ margin: '0 0 12px' }}>{item.title}</h3>
+              <p className="body-md" style={{ color: 'var(--on-surface-variant)', margin: 0 }}>{item.body}</p>
+            </div>
+          ))}
+        </div>
+      </section>
+
+      {/* Courts we cover */}
+      <section style={{ backgroundColor: 'var(--surface-container-low)', padding: '80px 40px' }}>
+        <div style={{ maxWidth: '960px', margin: '0 auto' }}>
+          <p className="label-sm" style={{ color: 'var(--secondary-container)', marginBottom: '12px', textAlign: 'center' }}>COVERAGE</p>
+          <h2 className="headline-md" style={{ textAlign: 'center', margin: '0 0 40px' }}>13 courts monitored</h2>
+          <div style={{ display: 'flex', flexWrap: 'wrap', gap: '10px', justifyContent: 'center' }}>
+            {COURTS.map((c) => (
+              <span
+                key={c}
+                style={{
+                  fontFamily: 'var(--font-mono)', fontSize: '12px', fontWeight: 500,
+                  backgroundColor: 'var(--primary-container)', color: '#fff',
+                  padding: '6px 14px', borderRadius: 'var(--rounded-md)',
+                }}
+              >
+                {c}
+              </span>
+            ))}
+          </div>
+        </div>
+      </section>
+
+      {/* Sample case card */}
+      <section style={{ maxWidth: '960px', margin: '0 auto', padding: '100px 40px' }}>
+        <p className="label-sm" style={{ color: 'var(--secondary-container)', marginBottom: '12px', textAlign: 'center' }}>SAMPLE OUTPUT</p>
+        <h2 className="headline-md" style={{ textAlign: 'center', margin: '0 0 48px' }}>What a Priority Brief looks like</h2>
+        <div
+          style={{
+            backgroundColor: 'var(--surface-container-lowest)',
+            borderLeft: '4px solid #D4873A',
+            borderRadius: 'var(--rounded-lg)',
+            padding: '32px',
+          }}
+        >
+          <div style={{ display: 'flex', flexWrap: 'wrap', gap: '8px', marginBottom: '16px' }}>
+            <span style={{ fontFamily: 'var(--font-mono)', fontSize: '11px', fontWeight: 500, backgroundColor: 'var(--primary-container)', color: '#fff', padding: '2px 8px', borderRadius: 'var(--rounded-md)' }}>FCAFC</span>
+            <span style={{ fontFamily: 'var(--font-sans)', fontSize: '11px', fontWeight: 500, backgroundColor: '#D4873A', color: '#fff', padding: '2px 8px', borderRadius: 'var(--rounded-md)', letterSpacing: '0.08rem', textTransform: 'uppercase' }}>SIGNIFICANT</span>
+            <span style={{ border: '1px solid var(--surface-dim)', color: 'var(--on-surface-variant)', fontSize: '11px', fontWeight: 500, padding: '2px 8px', borderRadius: 'var(--rounded-md)', letterSpacing: '0.06rem', textTransform: 'uppercase' }}>Contract</span>
+          </div>
+          <h3 className="title-lg" style={{ margin: '0 0 6px' }}>Acme Industries Pty Ltd v Commissioner of Taxation</h3>
+          <p className="mono" style={{ color: 'var(--on-surface-variant)', marginBottom: '20px' }}>[2025] FCAFC 88 · 14 Mar 2025</p>
+          <div style={{ marginBottom: '16px' }}>
+            <p className="label-sm" style={{ color: 'var(--on-surface-variant)', marginBottom: '8px' }}>FACTS</p>
+            <p className="body-md" style={{ color: 'var(--on-surface)', margin: 0 }}>The Full Federal Court considered whether the Commissioner's amended assessment was valid where the taxpayer had restructured its affairs in reliance on a private binding ruling...</p>
+          </div>
+          <div style={{ backgroundColor: 'var(--surface-container)', borderLeft: '3px solid var(--secondary-container)', padding: '16px 20px', borderRadius: '0 var(--rounded-md) var(--rounded-md) 0' }}>
+            <p className="label-sm" style={{ color: 'var(--secondary-container)', marginBottom: '6px' }}>WHY IT MATTERS</p>
+            <p style={{ fontFamily: 'var(--font-serif)', fontSize: '15px', fontStyle: 'italic', color: 'var(--on-surface)', margin: 0 }}>
+              Practitioners advising on private binding rulings must now account for the Full Court's narrower reading of estoppel against the Commissioner.
+            </p>
+          </div>
+        </div>
+      </section>
+
+      {/* Areas of law */}
+      <section style={{ backgroundColor: 'var(--surface-container-low)', padding: '80px 40px' }}>
+        <div style={{ maxWidth: '960px', margin: '0 auto' }}>
+          <p className="label-sm" style={{ color: 'var(--secondary-container)', marginBottom: '12px', textAlign: 'center' }}>PRACTICE AREAS</p>
+          <h2 className="headline-md" style={{ textAlign: 'center', margin: '0 0 40px' }}>15 areas covered</h2>
+          <div style={{ display: 'flex', flexWrap: 'wrap', gap: '10px', justifyContent: 'center' }}>
+            {AREAS.map((a) => (
+              <span
+                key={a}
+                style={{
+                  fontFamily: 'var(--font-sans)', fontSize: '13px', fontWeight: 600,
+                  border: '1.5px solid var(--surface-dim)', color: 'var(--on-surface-variant)',
+                  padding: '8px 16px', borderRadius: 'var(--rounded-md)',
+                  backgroundColor: 'var(--surface-container-lowest)',
+                }}
+              >
+                {a}
+              </span>
+            ))}
           </div>
         </div>
       </section>
 
       {/* Pricing */}
-      <section className="py-24">
-        <div className="mx-auto max-w-screen-lg px-6">
-          <h2 className="mb-12 text-center text-3xl font-bold text-neutral-900">
-            Simple pricing
-          </h2>
-          <div className="grid gap-8 md:grid-cols-2">
-            <PricingCard
-              name="Free"
-              price="$0"
-              description="For individuals and small projects."
-              features={[
-                "Up to 3 projects",
-                "30-day history",
-                "Email alerts",
-              ]}
-              cta="Get started"
-              ctaTo="/signup"
-            />
-            <PricingCard
-              name="Pro"
-              price="$29/mo"
-              description="For teams shipping production software."
-              features={[
-                "Unlimited projects",
-                "1-year history",
-                "Slack + email alerts",
-                "Team members",
-                "Priority support",
-              ]}
-              cta="Start free trial"
-              ctaTo="/signup"
-              highlighted
-            />
-          </div>
+      <section style={{ maxWidth: '960px', margin: '0 auto', padding: '100px 40px' }}>
+        <p className="label-sm" style={{ color: 'var(--secondary-container)', marginBottom: '12px', textAlign: 'center' }}>PRICING</p>
+        <h2 className="headline-md" style={{ textAlign: 'center', margin: '0 0 48px' }}>Simple, transparent plans</h2>
+        <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(260px, 1fr))', gap: '24px' }}>
+          <PricingCard tier="Free" price="$0" features={['3 runs/week', '1 practice area', 'Priority Insights dashboard', 'Weekly digest']} cta="Get Started" href="/signup" />
+          <PricingCard tier="Pro" price="$29/mo" features={['10 runs/week', 'All 15 practice areas', 'Full digest archive', 'Priority support']} cta="Start Free Trial" href="/signup" featured />
+          <PricingCard tier="Team" price="$99/mo" features={['Unlimited runs', 'All 15 practice areas', 'Multiple users', 'Custom reports']} cta="Contact Sales" href="/signup" />
         </div>
       </section>
 
-      {/* Footer CTA */}
-      <section className="border-t border-neutral-200 bg-white py-20 text-center">
-        <h2 className="mb-4 text-3xl font-bold text-neutral-900">
-          Ready to ship faster?
-        </h2>
-        <p className="mb-8 text-neutral-500">
-          Join teams already using Bench Watch to catch regressions early.
+      {/* Footer */}
+      <footer style={{ backgroundColor: 'var(--primary-container)', padding: '48px 40px', textAlign: 'center' }}>
+        <p style={{ fontFamily: 'var(--font-sans)', fontSize: '18px', fontWeight: 700, color: '#fff', margin: '0 0 8px' }}>BenchWatch</p>
+        <p className="label-sm" style={{ color: 'rgba(255,255,255,0.5)', margin: '0 0 24px' }}>Legal Intelligence</p>
+        <p className="label-sm" style={{ color: 'rgba(255,255,255,0.4)', margin: 0 }}>
+          Case law sourced from AustLII (austlii.edu.au) under their terms of use. BenchWatch is not a legal advice service.
         </p>
-        <ButtonLink to="/signup">Create your free account</ButtonLink>
-      </section>
+      </footer>
     </div>
-  );
+  )
 }
 
-function FeatureCard({
-  icon,
-  title,
-  description,
-}: {
-  icon: string;
-  title: string;
-  description: string;
-}) {
+function NavLink({ href, children }: { href: string; children: React.ReactNode }) {
   return (
-    <div className="card p-6">
-      <div className="mb-3 text-3xl">{icon}</div>
-      <h3 className="mb-2 text-lg font-semibold text-neutral-900">{title}</h3>
-      <p className="text-neutral-500">{description}</p>
-    </div>
-  );
+    <Link to={href} style={{ fontFamily: 'var(--font-sans)', fontSize: '14px', fontWeight: 500, color: 'var(--on-surface-variant)', textDecoration: 'none' }}>
+      {children}
+    </Link>
+  )
 }
 
-function PricingCard({
-  name,
-  price,
-  description,
-  features,
-  cta,
-  ctaTo,
-  highlighted = false,
-}: {
-  name: string;
-  price: string;
-  description: string;
-  features: string[];
-  cta: string;
-  ctaTo: To;
-  highlighted?: boolean;
-}) {
+function PricingCard({ tier, price, features, cta, href, featured }: { tier: string; price: string; features: string[]; cta: string; href: string; featured?: boolean }) {
   return (
     <div
-      className={`card p-8 ${highlighted ? "border-primary-400 ring-2 ring-primary-300" : ""}`}
+      style={{
+        backgroundColor: featured ? 'var(--primary-container)' : 'var(--surface-container-lowest)',
+        borderRadius: 'var(--rounded-lg)', padding: '32px',
+        ...(featured ? { boxShadow: '0 4px 40px -10px rgba(27,28,26,0.12)' } : {}),
+      }}
     >
-      <h3 className="mb-1 text-xl font-bold text-neutral-900">{name}</h3>
-      <div className="mb-2 text-4xl font-bold text-neutral-900">{price}</div>
-      <p className="mb-6 text-neutral-500">{description}</p>
-      <ul className="mb-8 space-y-2">
+      {featured && <p className="label-sm" style={{ color: 'var(--secondary)', marginBottom: '8px' }}>MOST POPULAR</p>}
+      <p className="label-lg" style={{ color: featured ? 'rgba(255,255,255,0.7)' : 'var(--on-surface-variant)', margin: '0 0 8px' }}>{tier}</p>
+      <p style={{ fontFamily: 'var(--font-sans)', fontSize: '32px', fontWeight: 700, color: featured ? '#fff' : 'var(--on-surface)', margin: '0 0 24px' }}>{price}</p>
+      <ul style={{ listStyle: 'none', padding: 0, margin: '0 0 32px' }}>
         {features.map((f) => (
-          <li key={f} className="flex items-center gap-2 text-neutral-700">
-            <span className="text-primary-500">✓</span> {f}
+          <li key={f} style={{ display: 'flex', gap: '8px', alignItems: 'center', marginBottom: '10px' }}>
+            <span style={{ color: featured ? 'var(--secondary)' : 'var(--secondary-container)', fontWeight: 700 }}>✓</span>
+            <span className="body-md" style={{ color: featured ? 'rgba(255,255,255,0.8)' : 'var(--on-surface-variant)' }}>{f}</span>
           </li>
         ))}
       </ul>
-      <ButtonLink to={ctaTo} variant={highlighted ? "primary" : "ghost"}>
+      <Link
+        to={href}
+        style={{
+          display: 'block', padding: '12px', textAlign: 'center',
+          borderRadius: 'var(--rounded-md)',
+          backgroundColor: featured ? 'var(--secondary-container)' : 'transparent',
+          border: featured ? 'none' : '1.5px solid var(--surface-dim)',
+          color: featured ? '#fff' : 'var(--on-surface-variant)',
+          fontFamily: 'var(--font-sans)', fontSize: '14px', fontWeight: 600,
+          textDecoration: 'none',
+        }}
+      >
         {cta}
-      </ButtonLink>
+      </Link>
     </div>
-  );
+  )
 }

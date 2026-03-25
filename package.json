@@ -6,6 +6,10 @@
     ".wasp/out/sdk/wasp"
   ],
   "dependencies": {
+    "@anthropic-ai/sdk": "^0.30.0",
+    "@prisma/client": "5.19.1",
+    "fast-xml-parser": "^4.3.0",
+    "lucide-react": "^1.6.0",
     "react": "^19.2.1",
     "react-dom": "^19.2.1",
     "react-hook-form": "^7.69.0",
@@ -15,9 +19,9 @@
   },
   "devDependencies": {
     "@eslint/js": "^9.27.0",
+    "@tailwindcss/vite": "^4.1.18",
     "@types/react": "^19.2.7",
     "@types/react-dom": "^19.2.3",
-    "@tailwindcss/vite": "^4.1.18",
     "eslint": "^9.27.0",
     "eslint-config-prettier": "^10.1.5",
     "eslint-plugin-react": "^7.37.5",

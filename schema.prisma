@@ -1,5 +1,5 @@
 datasource db {
-  provider = "sqlite"
+  provider = "postgresql"
   url      = env("DATABASE_URL")
 }
 
@@ -7,12 +7,205 @@ generator client {
   provider = "prisma-client-js"
 }
 
-// Use Prisma Schema file to define your entities: https://www.prisma.io/docs/concepts/components/prisma-schema.
-// Run `wasp db migrate-dev` in the CLI to create the database tables,
-// then run `wasp db studio` to open Prisma Studio and view your db models.
 model User {
-  id        String   @id @default(uuid())
-  username  String
-  plan      String   @default("free")
-  createdAt DateTime @default(now())
+  id                      String    @id @default(uuid())
+  username                String
+  plan                    String    @default("free")
+  onboarded               Boolean   @default(false)
+  dashboardRunsThisWeek   Int       @default(0)
+  dashboardRunsResetAt    DateTime?
+  createdAt               DateTime  @default(now())
+
+  userAreas  UserArea[]
+  userDigests UserDigest[]
+  emailSends  EmailSend[]
+}
+
+model RssFeedRegistry {
+  id               String    @id @default(cuid())
+  courtCode        String    @unique
+  courtName        String
+  source           String    @default("jade")
+  feedUrl          String
+  tier             Int       @default(1)
+  isActive         Boolean   @default(true)
+  lastPolledAt     DateTime?
+  lastSuccessfulAt DateTime?
+  lastError        String?
+  lastHttpStatus   Int?
+  itemsLastPoll    Int       @default(0)
+
+  @@map("rss_feed_registry")
+}
+
+model LawArea {
+  slug             String   @id
+  name             String
+  description      String?
+  searchTerms      String[]
+  catchwordPatterns String[]
+  icon             String?
+  sortOrder        Int      @default(0)
+  isActive         Boolean  @default(true)
+
+  userAreas    UserArea[]
+  caseAreaTags CaseAreaTag[]
+
+  @@map("law_areas")
+}
+
+model UserArea {
+  id             String  @id @default(cuid())
+  userId         String
+  areaSlug       String
+  emailFrequency String  @default("weekly")
+
+  user User    @relation(fields: [userId], references: [id])
+  area LawArea @relation(fields: [areaSlug], references: [slug])
+
+  @@unique([userId, areaSlug])
+  @@map("user_areas")
+}
+
+model Case {
+  id              String    @id @default(cuid())
+  citation        String    @unique
+  caseName        String
+  court           String
+  courtCode       String
+  decisionDate    DateTime?
+  austliiUrl      String?
+  jadeUrl         String?
+  catchwords      String?
+  judgmentExcerpt String?
+  excerptFetched  Boolean   @default(false)
+  bench           String?
+  orders          String?
+  createdAt       DateTime  @default(now())
+  updatedAt       DateTime  @updatedAt
+
+  caseAreaTags          CaseAreaTag[]
+  caseAnalysis          CaseAnalysis?
+  topDigestEntries      UserDigestTopCase[]
+  extendedDigestEntries UserDigestExtendedCase[]
+
+  @@map("cases")
+}
+
+model CaseAreaTag {
+  caseId              String
+  areaSlug            String
+  relevanceConfidence Float  @default(0.5)
+  assignedBy          String @default("triage_claude")
+
+  case Case    @relation(fields: [caseId], references: [id])
+  area LawArea @relation(fields: [areaSlug], references: [slug])
+
+  @@id([caseId, areaSlug])
+  @@map("case_area_tags")
+}
+
+model CaseAnalysis {
+  id                     String   @id @default(cuid())
+  caseId                 String   @unique
+  factsSummary           String
+  legalAnalysis          String
+  whyItMatters           String
+  significanceScore      Int
+  scoreJustification     String?
+  primaryArea            String
+  secondaryAreas         String[]
+  classificationReasoning String?
+  modelUsed              String
+  generatedAt            DateTime @default(now())
+
+  case Case @relation(fields: [caseId], references: [id])
+
+  @@map("case_analyses")
+}
+
+model DiscoveryRun {
+  id              String    @id @default(cuid())
+  periodType      String    @default("weekly")
+  periodStart     DateTime
+  periodEnd       DateTime
+  status          String    @default("running")
+  courtsPolled    String[]
+  casesDiscovered Int       @default(0)
+  casesTriaged    Int       @default(0)
+  casesAnalysed   Int       @default(0)
+  errorMessage    String?
+  createdAt       DateTime  @default(now())
+  completedAt     DateTime?
+
+  @@map("discovery_runs")
+}
+
+model UserDigest {
+  id            String    @id @default(cuid())
+  userId        String
+  periodType    String    @default("weekly")
+  periodStart   DateTime
+  periodEnd     DateTime
+  areaSlugs     String[]
+  status        String    @default("pending")
+  digestSummary String?
+  modelUsed     String?
+  tokensUsed    Int?
+  errorMessage  String?
+  createdAt     DateTime  @default(now())
+  completedAt   DateTime?
+
+  user           User                     @relation(fields: [userId], references: [id])
+  topCases       UserDigestTopCase[]      @relation("DigestTopCases")
+  extendedCases  UserDigestExtendedCase[] @relation("DigestExtendedCases")
+  emailSends     EmailSend[]
+
+  @@map("user_digests")
+}
+
+model UserDigestTopCase {
+  id                String @id @default(cuid())
+  digestId          String
+  caseId            String
+  rank              Int
+  factsSummary      String
+  legalAnalysis     String
+  whyItMatters      String
+  significanceScore Int
+  primaryArea       String
+
+  digest UserDigest @relation("DigestTopCases", fields: [digestId], references: [id])
+  case   Case       @relation(fields: [caseId], references: [id])
+
+  @@map("user_digest_top_cases")
+}
+
+model UserDigestExtendedCase {
+  id                String @id @default(cuid())
+  digestId          String
+  caseId            String
+  rank              Int
+  significanceScore Int
+  primaryArea       String
+  oneLineSummary    String
+
+  digest UserDigest @relation("DigestExtendedCases", fields: [digestId], references: [id])
+  case   Case       @relation(fields: [caseId], references: [id])
+
+  @@map("user_digest_extended_cases")
+}
+
+model EmailSend {
+  id        String    @id @default(cuid())
+  userId    String
+  digestId  String?
+  sentAt    DateTime  @default(now())
+  status    String    @default("pending")
+  emailType String
+
+  user   User        @relation(fields: [userId], references: [id])
+  digest UserDigest? @relation(fields: [digestId], references: [id])
+
+  @@map("email_sends")
 }
