@@ -34,3 +34,5 @@ To improve your Wasp development experience, we recommend installing the [Wasp e
 
 To find out more about Wasp, visit out [docs](https://wasp.sh/docs).
 # bench-watch
+# bench-watch-update
+# bench-watch-update
