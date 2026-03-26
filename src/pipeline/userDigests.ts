@@ -116,6 +116,10 @@ export async function buildAndSaveDigest(userId: string, areaSlugs: string[]): P
       throw new Error('Digest JSON parse failed')
     }
 
+    console.log(`[digests] matchingCases citations:`, matchingCases.map(c => c.citation))
+    console.log(`[digests] topCases from Claude:`, result.topCases.map(tc => tc.citation))
+    console.log(`[digests] extendedCases from Claude:`, result.extendedCases.map(ec => ec.citation))
+
     for (const tc of result.topCases) {
       const caseRecord = matchingCases.find((c) => normCitation(c.citation) === normCitation(tc.citation))
       if (!caseRecord) {
@@ -177,7 +181,8 @@ export async function buildAndSaveDigest(userId: string, areaSlugs: string[]): P
 }
 
 function normCitation(s: string): string {
-  return s.replace(/\s+/g, ' ').trim().toLowerCase()
+  // Claude sometimes appends " — Case Name" to the citation — strip it
+  return s.split(/\s+[—–-]\s+/)[0].replace(/\s+/g, ' ').trim().toLowerCase()
 }
 
 function sleep(ms: number): Promise<void> {
