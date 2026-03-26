@@ -240,7 +240,7 @@ export function CaseAnalysisPage() {
             {/* Why it matters — highlighted */}
             <div
               style={{
-                backgroundColor: '#F5F0E8',
+                backgroundColor: 'var(--color-highlight-bg)',
                 borderLeft: '3px solid var(--secondary-container)',
                 padding: '20px 24px',
                 borderRadius: '0 var(--rounded-md) var(--rounded-md) 0',

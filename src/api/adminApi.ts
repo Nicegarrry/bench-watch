@@ -4,6 +4,7 @@ import { runDiscovery, runDiscoveryAll } from '../pipeline/discovery'
 import { runTriageOnly, runTextRetrieval, runCaseAnalysis } from '../pipeline/triage'
 import { runDigests } from '../pipeline/userDigests'
 import { ALL_AREA_SLUGS } from '../shared/constants'
+import { buildBatchAnalysisPrompt } from '../pipeline/prompts'
 
 const WEEK_MS = 7 * 24 * 60 * 60 * 1000
 
@@ -178,4 +179,137 @@ export const setupTestUserHandler = async (_req: any, res: any, context: any) =>
   })
 
   res.json({ message: 'Done — Pro plan, all 15 areas assigned.' })
+}
+
+const BATCH_SIZE = 50
+
+// GET /api/admin/backfill-prompt?batch=1
+// Returns a plain-text prompt for batch N (1-based) of cases needing analysis.
+// Paste into Claude.ai, then POST the JSON response to /api/admin/backfill-import.
+export const backfillPromptHandler = async (req: any, res: any, context: any) => {
+  if (!context.user) throw new HttpError(401)
+
+  const batch = parseInt(req.query.batch ?? '1', 10)
+  const skip = (batch - 1) * BATCH_SIZE
+
+  const cases = await prisma.case.findMany({
+    where: { excerptFetched: true, caseAnalysis: null },
+    orderBy: [{ judgmentExcerpt: 'desc' }, { createdAt: 'desc' }],
+    skip,
+    take: BATCH_SIZE,
+    select: {
+      citation: true,
+      caseName: true,
+      court: true,
+      catchwords: true,
+      judgmentExcerpt: true,
+    },
+  })
+
+  if (cases.length === 0) {
+    res.type('text/plain').send(`No cases remaining for analysis in batch ${batch}.`)
+    return
+  }
+
+  const totalPending = await prisma.case.count({
+    where: { excerptFetched: true, caseAnalysis: null },
+  })
+  const totalBatches = Math.ceil(totalPending / BATCH_SIZE)
+
+  const prompt = buildBatchAnalysisPrompt(cases)
+  const header = `# Batch ${batch} of ${totalBatches} — ${cases.length} cases (${totalPending} total pending)\n# POST the JSON response to /api/admin/backfill-import\n\n`
+
+  res.type('text/plain').send(header + prompt)
+}
+
+// POST /api/admin/backfill-import
+// Body: JSON array matching BatchAnalysisResult schema (from Claude.ai response).
+// Upserts into case_analyses and updates secondary area tags.
+export const backfillImportHandler = async (req: any, res: any, context: any) => {
+  if (!context.user) throw new HttpError(401)
+
+  const analyses: Array<{
+    citation: string
+    factsSummary: string
+    legalAnalysis: string
+    whyItMatters: string
+    significanceScore: number
+    scoreJustification: string
+    primaryArea: string
+    secondaryAreas: string[]
+    classificationReasoning: string
+  }> = req.body
+
+  if (!Array.isArray(analyses)) {
+    throw new HttpError(400, 'Body must be a JSON array of analysis objects')
+  }
+
+  let imported = 0
+  let skipped = 0
+  const errors: string[] = []
+
+  for (const a of analyses) {
+    if (!a.citation) { errors.push('Missing citation — skipped'); continue }
+
+    const c = await prisma.case.findUnique({
+      where: { citation: a.citation },
+      select: { id: true },
+    })
+
+    if (!c) {
+      errors.push(`Citation not found: ${a.citation}`)
+      skipped++
+      continue
+    }
+
+    try {
+      await prisma.caseAnalysis.upsert({
+        where: { caseId: c.id },
+        update: {
+          factsSummary: a.factsSummary,
+          legalAnalysis: a.legalAnalysis,
+          whyItMatters: a.whyItMatters,
+          significanceScore: a.significanceScore,
+          scoreJustification: a.scoreJustification ?? null,
+          primaryArea: a.primaryArea,
+          secondaryAreas: a.secondaryAreas ?? [],
+          classificationReasoning: a.classificationReasoning ?? null,
+          modelUsed: 'claude-ai-web',
+          generatedAt: new Date(),
+        },
+        create: {
+          caseId: c.id,
+          factsSummary: a.factsSummary,
+          legalAnalysis: a.legalAnalysis,
+          whyItMatters: a.whyItMatters,
+          significanceScore: a.significanceScore,
+          scoreJustification: a.scoreJustification ?? null,
+          primaryArea: a.primaryArea,
+          secondaryAreas: a.secondaryAreas ?? [],
+          classificationReasoning: a.classificationReasoning ?? null,
+          modelUsed: 'claude-ai-web',
+          generatedAt: new Date(),
+        },
+      })
+
+      // Upsert secondary area tags
+      for (const areaSlug of (a.secondaryAreas ?? [])) {
+        if (areaSlug === a.primaryArea) continue
+        try {
+          await prisma.caseAreaTag.upsert({
+            where: { caseId_areaSlug: { caseId: c.id, areaSlug } },
+            update: { relevanceConfidence: 0.5 },
+            create: { caseId: c.id, areaSlug, relevanceConfidence: 0.5, assignedBy: 'analysis_claude' },
+          })
+        } catch { /* invalid slug — skip */ }
+      }
+
+      imported++
+    } catch (err: any) {
+      errors.push(`${a.citation}: ${err?.message ?? 'unknown error'}`)
+      skipped++
+    }
+  }
+
+  res.json({ imported, skipped, errors })
 }

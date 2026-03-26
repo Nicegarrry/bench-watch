@@ -230,7 +230,7 @@ function FullCardBody({ data }: { data: CaseCardData }) {
       {/* Why it matters */}
       <div
         style={{
-          backgroundColor: 'var(--surface-container)',
+          backgroundColor: 'var(--color-highlight-bg)',
           borderLeft: '3px solid var(--secondary-container)',
           padding: '16px 20px',
           borderRadius: '0 var(--rounded-md) var(--rounded-md) 0',

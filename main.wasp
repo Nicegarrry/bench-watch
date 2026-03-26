@@ -103,6 +103,12 @@ page IntelligencePage {
   component: import { IntelligencePage } from "@src/intelligence/IntelligencePage"
 }
 
+route CaseLibraryRoute { path: "/library", to: CaseLibraryPage }
+page CaseLibraryPage {
+  authRequired: true,
+  component: import { CaseLibraryPage } from "@src/library/CaseLibraryPage"
+}
+
 route CaseAnalysisRoute { path: "/cases/:id", to: CaseAnalysisPage }
 page CaseAnalysisPage {
   authRequired: true,
@@ -157,6 +163,13 @@ api runDigestApi {
   entities: [User, UserDigest, UserArea],
   auth: true,
   httpRoute: (POST, "/api/run-digest")
+}
+
+api getCasesApi {
+  fn: import { getCasesHandler } from "@src/api/caseApi",
+  entities: [CaseAnalysis, Case],
+  auth: true,
+  httpRoute: (GET, "/api/cases")
 }
 
 api getCaseAnalysisApi {
@@ -271,5 +284,19 @@ api adminSetupTestUserApi {
   entities: [],
   auth: true,
   httpRoute: (POST, "/api/admin/setup-test-user")
+}
+
+api adminBackfillPromptApi {
+  fn: import { backfillPromptHandler } from "@src/api/adminApi",
+  entities: [],
+  auth: true,
+  httpRoute: (GET, "/api/admin/backfill-prompt")
+}
+
+api adminBackfillImportApi {
+  fn: import { backfillImportHandler } from "@src/api/adminApi",
+  entities: [],
+  auth: true,
+  httpRoute: (POST, "/api/admin/backfill-import")
 }
 // #endregion Dev-only
