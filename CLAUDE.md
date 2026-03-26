@@ -7,7 +7,7 @@ It monitors every major Australian appellate court, discovers new decisions via 
 uses AI to identify the most significant ones, generates case analyses, and delivers
 personalised digests to users based on their chosen areas of law.
 
-**Stack:** Wasp framework · Supabase (Postgres + auth) · Vercel · Stripe · Resend (email)
+**Stack:** Wasp framework · Supabase (Postgres + auth) · Railway (server) · Vercel (client SPA) · Stripe · Resend (email)
 
 **Lovable prototype exists** for user testing only — this is the real build. Don't
 reference or mirror the Lovable codebase.
@@ -281,6 +281,31 @@ use this layout. Landing and auth pages are full-width only.
 
 ---
 
+## Deployment Architecture
+
+**NOT Vercel serverless** — Wasp uses PgBoss (job queue) which requires a persistent
+Node.js process. Vercel serverless functions can't run persistent background workers.
+
+**Server → Railway** (or Fly.io): The Wasp Express server runs as a persistent process.
+PgBoss is embedded in the server and handles the Sunday cron pipeline.
+
+**Client → Vercel** (or Netlify): After `wasp build`, the static React SPA in
+`.wasp/build/web-app/` can be hosted on Vercel as a static site (no server needed).
+
+**Deployment steps (when ready):**
+```bash
+wasp build                          # generates .wasp/build/server/ + web-app/
+cd .wasp/build/server && railway up  # deploy server to Railway
+# deploy .wasp/build/web-app/ to Vercel as static site
+```
+
+**Env vars needed on Railway:** `DATABASE_URL`, `ANTHROPIC_API_KEY`, `WASP_SERVER_URL`,
+`WASP_WEB_CLIENT_URL`, `JWT_SECRET`
+
+**Dev: still on localhost** — `wasp start` handles everything locally.
+
+---
+
 ## Key Decisions (Don't Revisit Without Good Reason)
 - JADE RSS for discovery (AustLII feeds are dead)
 - `www6.austlii.edu.au` for judgment text (other mirrors blocked server-side)
@@ -290,3 +315,18 @@ use this layout. Landing and auth pages are full-width only.
 - Phase 1 runs once per week (shared); Phase 3 runs per user
 - Queue/worker pattern for Phase 2b — never in a single synchronous function
 - Fetch first 100KB only from AustLII pages (text is at the top)
+
+---
+
+## Wasp + Prisma: Schema Rules (Don't Break These)
+
+**How Wasp manages schema.prisma:**
+- The developer-owned source is `/schema.prisma` at the project root — edit this one
+- Wasp reads it and generates `.wasp/out/db/schema.prisma` by appending auth models (`Auth`, `AuthIdentity`, `Session`) and an `auth Auth?` field to `User`
+- The generated file at `.wasp/out/db/schema.prisma` is read-only — never edit it directly
+
+**Rules:**
+1. Never manually add `Auth`, `AuthIdentity`, or `Session` models to the project-root `schema.prisma` — Wasp injects these automatically. Doing so causes "cannot be defined because a model with that name already exists" errors across the whole schema.
+2. Always run database commands via `wasp db migrate-dev`, never `npx prisma migrate dev` directly from the project root. Running Prisma directly creates a stray `migrations/` folder at the root; the canonical migrations live in `.wasp/out/db/migrations/`.
+3. If you see the "already exists" errors, check `schema.prisma` for auth model duplicates and remove them.
+4. If there is a stray `migrations/` at the project root, delete it: `rm -rf migrations/`

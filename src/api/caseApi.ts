@@ -9,7 +9,7 @@ export const getCaseAnalysisHandler = async (req: any, res: any, context: any) =
     where: { caseId: id },
     include: {
       case: {
-        select: { citation: true, caseName: true, court: true, jadeUrl: true, austliiUrl: true },
+        select: { citation: true, caseName: true, court: true, courtCode: true, decisionDate: true, catchwords: true, jadeUrl: true, austliiUrl: true, bench: true },
       },
     },
   })

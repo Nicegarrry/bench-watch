@@ -8,7 +8,7 @@ const anthropic = new Anthropic({ apiKey: process.env.ANTHROPIC_API_KEY })
 // Score threshold for using web search (7+ = high significance, worth enriching)
 const WEB_SEARCH_THRESHOLD = 0.7
 
-export async function analyseCases(): Promise<void> {
+export async function analyseCases(limit?: number): Promise<void> {
   const cases = await prisma.case.findMany({
     where: {
       excerptFetched: true,
@@ -20,9 +20,12 @@ export async function analyseCases(): Promise<void> {
         take: 1,
       },
     },
+    // Prioritise cases with full judgment text (7+ scored) over catchword-only ones
+    orderBy: [{ judgmentExcerpt: 'desc' }, { createdAt: 'desc' }],
+    ...(limit ? { take: limit } : {}),
   })
 
-  console.log(`[caseAnalysis] Analysing ${cases.length} cases.`)
+  console.log(`[caseAnalysis] Analysing ${cases.length} cases${limit ? ` (limit: ${limit})` : ''}.`)
 
   for (const c of cases) {
     const topConfidence = c.caseAreaTags[0]?.relevanceConfidence ?? 0

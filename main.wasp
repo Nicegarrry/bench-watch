@@ -102,6 +102,12 @@ page IntelligencePage {
   authRequired: true,
   component: import { IntelligencePage } from "@src/intelligence/IntelligencePage"
 }
+
+route CaseAnalysisRoute { path: "/cases/:id", to: CaseAnalysisPage }
+page CaseAnalysisPage {
+  authRequired: true,
+  component: import { CaseAnalysisPage } from "@src/cases/CaseAnalysisPage"
+}
 // #endregion App Pages
 
 // #region Jobs
@@ -182,7 +188,9 @@ api updateUserAreasApi {
 }
 // #endregion APIs
 
-// #region Dev-only pipeline triggers (remove before production)
+// #region Dev-only admin console (remove before production)
+
+// Wasp actions — used by DashboardPage's synchronous pipeline triggers
 action triggerDiscovery {
   fn: import { runDiscovery } from "@src/pipeline/discovery",
   entities: []
@@ -201,5 +209,67 @@ action triggerDigests {
 action setupTestUser {
   fn: import { setupTestUser } from "@src/pipeline/devSetup",
   entities: [User, UserArea]
+}
+
+route DevRoute { path: "/dev", to: DevPage }
+page DevPage {
+  authRequired: true,
+  component: import { DevPage } from "@src/dev/DevPage"
+}
+
+api adminStatusApi {
+  fn: import { getAdminStatusHandler } from "@src/api/adminApi",
+  entities: [],
+  auth: true,
+  httpRoute: (GET, "/api/admin/status")
+}
+
+api adminTriggerDiscoveryApi {
+  fn: import { triggerDiscoveryHandler } from "@src/api/adminApi",
+  entities: [],
+  auth: true,
+  httpRoute: (POST, "/api/admin/trigger-discovery")
+}
+
+api adminBackfillDiscoveryApi {
+  fn: import { backfillDiscoveryHandler } from "@src/api/adminApi",
+  entities: [],
+  auth: true,
+  httpRoute: (POST, "/api/admin/backfill-discovery")
+}
+
+api adminTriggerTriageApi {
+  fn: import { triggerTriageOnlyHandler } from "@src/api/adminApi",
+  entities: [],
+  auth: true,
+  httpRoute: (POST, "/api/admin/trigger-triage")
+}
+
+api adminTriggerTextRetrievalApi {
+  fn: import { triggerTextRetrievalHandler } from "@src/api/adminApi",
+  entities: [],
+  auth: true,
+  httpRoute: (POST, "/api/admin/trigger-text-retrieval")
+}
+
+api adminTriggerCaseAnalysisApi {
+  fn: import { triggerCaseAnalysisHandler } from "@src/api/adminApi",
+  entities: [],
+  auth: true,
+  httpRoute: (POST, "/api/admin/trigger-case-analysis")
+}
+
+api adminTriggerDigestsApi {
+  fn: import { triggerDigestsHandler } from "@src/api/adminApi",
+  entities: [],
+  auth: true,
+  httpRoute: (POST, "/api/admin/trigger-digests")
+}
+
+api adminSetupTestUserApi {
+  fn: import { setupTestUserHandler } from "@src/api/adminApi",
+  entities: [],
+  auth: true,
+  httpRoute: (POST, "/api/admin/setup-test-user")
 }
 // #endregion Dev-only

@@ -4,7 +4,6 @@ import { buildTriagePrompt, type TriageCase, type TriageResult } from './prompts
 import { extractJson } from './utils'
 import { fetchJudgmentTexts } from './textRetrieval'
 import { analyseCases } from './caseAnalysis'
-import { JADE_FEEDS } from './feedRegistry'
 
 const anthropic = new Anthropic({ apiKey: process.env.ANTHROPIC_API_KEY })
 const BATCH_SIZE = 30
@@ -26,7 +25,7 @@ const COURT_TIER: Record<string, 1 | 2 | 3> = {
   FCA:    3,
 }
 
-// WASP job handler — orchestrates Phase 2: triage → text retrieval → case analysis
+// WASP job handler — orchestrates all of Phase 2 (2a + 2b + 2c)
 export const runTriage = async (_args: unknown, _context: unknown): Promise<void> => {
   console.log('[triage] Starting Phase 2a: AI triage...')
   await runTriageBatches()
@@ -40,12 +39,21 @@ export const runTriage = async (_args: unknown, _context: unknown): Promise<void
   console.log('[triage] Phase 2 complete.')
 }
 
-async function runTriageBatches(): Promise<void> {
-  const sevenDaysAgo = new Date(Date.now() - 7 * 24 * 60 * 60 * 1000)
+// Individual phase exports — used by admin API for split triggers
+export async function runTriageOnly(_args?: unknown, _context?: unknown): Promise<void> {
+  console.log('[triage] Phase 2a: AI triage...')
+  await runTriageBatches()
+  console.log('[triage] Phase 2a complete.')
+}
 
+export { fetchJudgmentTexts as runTextRetrieval } from './textRetrieval'
+export { analyseCases as runCaseAnalysis } from './caseAnalysis'
+
+async function runTriageBatches(): Promise<void> {
+  // No date filter — process ALL untriaged cases so backfills work correctly.
+  // Idempotent: cases already tagged by triage are excluded via `caseAreaTags: { none: {} }`.
   const untriagedCases = await prisma.case.findMany({
     where: {
-      createdAt: { gte: sevenDaysAgo },
       caseAreaTags: { none: {} },
     },
     select: {

@@ -1,10 +1,12 @@
 import { useState } from 'react'
-import { ExternalLink, ChevronDown, ChevronUp } from 'lucide-react'
+import { Link } from 'react-router'
+import { ExternalLink, ChevronDown, ChevronUp, ArrowRight } from 'lucide-react'
 import { CourtBadge } from './CourtBadge'
 import { SignificanceBadge, getSignificanceColor } from './SignificanceBadge'
 import { AreaTag } from './AreaTag'
 
 type CaseCardData = {
+  caseId?: string
   citation: string
   caseName: string
   court: string
@@ -56,15 +58,28 @@ export function CaseCard({ data, variant = 'full', rank }: CaseCardProps) {
           <div style={{ display: 'flex', alignItems: 'center', gap: '8px', flexShrink: 0 }}>
             <AreaTag slug={data.primaryArea} />
             <span className="mono" style={{ color: 'var(--on-surface-variant)' }}>{data.significanceScore}/10</span>
-            {expanded ? <ChevronUp size={14} color="var(--on-surface-variant)" /> : <ChevronDown size={14} color="var(--on-surface-variant)" />}
+            <ChevronDown
+              size={14}
+              color="var(--on-surface-variant)"
+              style={{ transform: expanded ? 'rotate(180deg)' : 'rotate(0deg)', transition: 'transform 250ms ease' }}
+            />
           </div>
         </button>
 
-        {expanded && (
-          <div style={{ padding: '0 20px 20px' }}>
-            <FullCardBody data={data} />
+        {/* Smooth expand — grid-template-rows trick */}
+        <div
+          style={{
+            display: 'grid',
+            gridTemplateRows: expanded ? '1fr' : '0fr',
+            transition: 'grid-template-rows 280ms cubic-bezier(0.4, 0, 0.2, 1)',
+          }}
+        >
+          <div style={{ overflow: 'hidden' }}>
+            <div style={{ padding: '0 20px 20px' }}>
+              <FullCardBody data={data} />
+            </div>
           </div>
-        )}
+        </div>
       </div>
     )
   }
@@ -123,12 +138,42 @@ export function CaseCard({ data, variant = 'full', rank }: CaseCardProps) {
 
       <FullCardBody data={data} />
 
-      {/* Footer links */}
-      <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginTop: '24px', paddingTop: '16px' }}>
+      {/* Footer */}
+      <div
+        style={{
+          display: 'flex', alignItems: 'center', justifyContent: 'space-between',
+          marginTop: '24px', paddingTop: '16px', borderTop: '1px solid var(--surface-dim)',
+          flexWrap: 'wrap', gap: '12px',
+        }}
+      >
         <p className="label-sm" style={{ color: 'var(--on-surface-variant)' }}>
           ● BENCHWATCH PRIORITISED ANALYSIS
         </p>
-        <div style={{ display: 'flex', gap: '16px', alignItems: 'center' }}>
+        <div style={{ display: 'flex', gap: '16px', alignItems: 'center', flexWrap: 'wrap' }}>
+          {data.caseId && (
+            <Link
+              to={`/cases/${data.caseId}`}
+              style={{
+                display: 'inline-flex', alignItems: 'center', gap: '4px',
+                fontFamily: 'var(--font-sans)', fontSize: '13px', fontWeight: 600,
+                color: 'var(--on-surface)', textDecoration: 'none',
+                padding: '5px 10px',
+                border: '1px solid var(--surface-dim)',
+                borderRadius: 'var(--rounded-md)',
+                transition: 'all 150ms',
+              }}
+              onMouseEnter={(e) => {
+                e.currentTarget.style.backgroundColor = 'var(--surface-container-low)'
+                e.currentTarget.style.borderColor = 'var(--surface-container-high)'
+              }}
+              onMouseLeave={(e) => {
+                e.currentTarget.style.backgroundColor = 'transparent'
+                e.currentTarget.style.borderColor = 'var(--surface-dim)'
+              }}
+            >
+              Full Analysis <ArrowRight size={12} />
+            </Link>
+          )}
           {data.austliiUrl && (
             <a
               href={data.austliiUrl}

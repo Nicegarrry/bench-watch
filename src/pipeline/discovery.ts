@@ -13,14 +13,14 @@ type RawCase = {
   austliiUrl: string | null
 }
 
-// WASP job handler — called by PgBoss on schedule
-export const runDiscovery = async (_args: unknown, _context: unknown): Promise<void> => {
+// Core discovery runner — `since` filters to recent items only; pass null for a full backfill
+async function runDiscoveryCore(periodType: string, since: Date | null): Promise<void> {
   const now = new Date()
-  const periodStart = new Date(now.getTime() - 7 * 24 * 60 * 60 * 1000)
+  const periodStart = since ?? new Date(0)
 
   const run = await prisma.discoveryRun.create({
     data: {
-      periodType: 'weekly',
+      periodType,
       periodStart,
       periodEnd: now,
       status: 'running',
@@ -36,7 +36,7 @@ export const runDiscovery = async (_args: unknown, _context: unknown): Promise<v
     for (const feed of JADE_FEEDS) {
       if (!feed) continue
       try {
-        const cases = await pollFeed(feed, periodStart)
+        const cases = await pollFeed(feed, since)
         courtsPolled.push(feed.courtCode)
 
         for (const c of cases) {
@@ -99,7 +99,19 @@ export const runDiscovery = async (_args: unknown, _context: unknown): Promise<v
   }
 }
 
-async function pollFeed(feed: FeedConfig, since: Date): Promise<RawCase[]> {
+// WASP job handler — weekly scheduled run (last 7 days only)
+export const runDiscovery = async (_args: unknown, _context: unknown): Promise<void> => {
+  const since = new Date(Date.now() - 7 * 24 * 60 * 60 * 1000)
+  await runDiscoveryCore('weekly', since)
+}
+
+// Backfill — fetches ALL items currently in JADE feeds regardless of date
+export async function runDiscoveryAll(_args?: unknown, _context?: unknown): Promise<void> {
+  console.log('[discovery] Starting backfill — no date filter, fetching all feed items...')
+  await runDiscoveryCore('backfill', null)
+}
+
+async function pollFeed(feed: FeedConfig, since: Date | null): Promise<RawCase[]> {
   const res = await fetch(feed.feedUrl, { headers: JADE_FETCH_HEADERS })
 
   await prisma.rssFeedRegistry.updateMany({
@@ -118,7 +130,10 @@ async function pollFeed(feed: FeedConfig, since: Date): Promise<RawCase[]> {
 
   const xml = await res.text()
   const cases = parseRss(xml, feed.courtCode, feed.courtName)
-  const filtered = cases.filter((c) => !c.decisionDate || c.decisionDate >= since)
+  // since=null means backfill — take everything in the feed
+  const filtered = since
+    ? cases.filter((c) => !c.decisionDate || c.decisionDate >= since)
+    : cases
 
   await prisma.rssFeedRegistry.updateMany({
     where: { courtCode: feed.courtCode },

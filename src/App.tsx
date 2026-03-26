@@ -3,7 +3,7 @@ import './App.css'
 import { AppLayout } from './shared/components/AppLayout'
 
 // Routes that use the sidebar+topbar layout
-const APP_ROUTES = ['/intelligence', '/archive', '/settings', '/dashboard']
+const APP_ROUTES = ['/intelligence', '/archive', '/settings', '/dashboard', '/dev', '/cases']
 
 export function App() {
   const location = useLocation()

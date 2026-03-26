@@ -1,10 +1,5 @@
 import { prisma } from 'wasp/server'
-
-const ALL_AREA_SLUGS = [
-  'administrative', 'constitutional', 'contract', 'employment', 'criminal',
-  'corporations', 'property', 'planning', 'tax', 'tort', 'ip',
-  'competition', 'migration', 'privacy', 'family',
-]
+import { ALL_AREA_SLUGS } from '../shared/constants'
 
 /**
  * Dev-only action: promote the current user to Pro plan, mark as onboarded,

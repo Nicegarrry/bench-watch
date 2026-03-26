@@ -117,8 +117,11 @@ export async function buildAndSaveDigest(userId: string, areaSlugs: string[]): P
     }
 
     for (const tc of result.topCases) {
-      const caseRecord = matchingCases.find((c) => c.citation === tc.citation)
-      if (!caseRecord) continue
+      const caseRecord = matchingCases.find((c) => normCitation(c.citation) === normCitation(tc.citation))
+      if (!caseRecord) {
+        console.warn(`[digests] topCase citation not found: "${tc.citation}"`)
+        continue
+      }
       await prisma.userDigestTopCase.create({
         data: {
           digestId: digest.id,
@@ -134,8 +137,11 @@ export async function buildAndSaveDigest(userId: string, areaSlugs: string[]): P
     }
 
     for (const ec of result.extendedCases) {
-      const caseRecord = matchingCases.find((c) => c.citation === ec.citation)
-      if (!caseRecord) continue
+      const caseRecord = matchingCases.find((c) => normCitation(c.citation) === normCitation(ec.citation))
+      if (!caseRecord) {
+        console.warn(`[digests] extendedCase citation not found: "${ec.citation}"`)
+        continue
+      }
       await prisma.userDigestExtendedCase.create({
         data: {
           digestId: digest.id,
@@ -168,6 +174,10 @@ export async function buildAndSaveDigest(userId: string, areaSlugs: string[]): P
     })
     throw err
   }
+}
+
+function normCitation(s: string): string {
+  return s.replace(/\s+/g, ' ').trim().toLowerCase()
 }
 
 function sleep(ms: number): Promise<void> {

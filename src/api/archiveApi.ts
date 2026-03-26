@@ -16,11 +16,11 @@ export const getArchiveHandler = async (req: any, res: any, context: any) => {
       include: {
         topCases: {
           orderBy: { rank: 'asc' },
-          include: { case: { select: { citation: true, caseName: true, court: true, courtCode: true, decisionDate: true, catchwords: true, jadeUrl: true, austliiUrl: true } } },
+          include: { case: { select: { id: true, citation: true, caseName: true, court: true, courtCode: true, decisionDate: true, catchwords: true, jadeUrl: true, austliiUrl: true } } },
         },
         extendedCases: {
           orderBy: { rank: 'asc' },
-          include: { case: { select: { citation: true, caseName: true, court: true, decisionDate: true } } },
+          include: { case: { select: { id: true, citation: true, caseName: true, court: true, decisionDate: true } } },
         },
       },
     }),

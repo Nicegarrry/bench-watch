@@ -1,20 +1,22 @@
 import { useEffect, useState } from 'react'
+import { Link } from 'react-router'
 import { useAuth } from 'wasp/client/auth'
 import { apiFetch } from '../shared/apiFetch'
 import { BriefHeader } from '../shared/components/BriefHeader'
 import { CaseCard } from '../shared/components/CaseCard'
-import { AreaTag, AREA_LABELS } from '../shared/components/AreaTag'
-import { ChevronDown, ChevronUp, Loader2 } from 'lucide-react'
+import { AreaTag } from '../shared/components/AreaTag'
+import { SkeletonIntelligencePage } from '../shared/components/Skeleton'
+import { ChevronDown, Loader2, ArrowRight } from 'lucide-react'
 
 type TopCase = {
-  id: string; rank: number
+  id: string; rank: number; caseId: string
   factsSummary: string; legalAnalysis: string; whyItMatters: string
   significanceScore: number; primaryArea: string
   case: { citation: string; caseName: string; court: string; courtCode?: string; decisionDate?: string; catchwords?: string; jadeUrl?: string | null; austliiUrl?: string | null }
 }
 
 type ExtendedCase = {
-  id: string; rank: number; significanceScore: number; primaryArea: string; oneLineSummary: string
+  id: string; rank: number; caseId: string; significanceScore: number; primaryArea: string; oneLineSummary: string
   case: { citation: string; caseName: string; court: string; decisionDate?: string }
 }
 
@@ -92,7 +94,7 @@ export function IntelligencePage() {
             display: 'flex', alignItems: 'center', gap: '6px',
           }}
         >
-          {running && <Loader2 size={13} style={{ animation: 'spin 1s linear infinite' }} />}
+          {running && <Loader2 size={13} style={{ animation: 'bw-spin 1s linear infinite' }} />}
           {running ? 'Starting…' : '+ New Research'}
         </button>
       </div>
@@ -111,12 +113,8 @@ export function IntelligencePage() {
         </div>
       )}
 
-      {/* Loading */}
-      {loading && (
-        <div style={{ display: 'flex', justifyContent: 'center', padding: '80px 0' }}>
-          <Loader2 size={24} color="var(--on-surface-variant)" style={{ animation: 'spin 1s linear infinite' }} />
-        </div>
-      )}
+      {/* Skeleton loading — realistic preview of the full page */}
+      {loading && <SkeletonIntelligencePage />}
 
       {/* Error */}
       {error && !loading && (
@@ -136,7 +134,7 @@ export function IntelligencePage() {
       )}
 
       {digest && (
-        <>
+        <div style={{ animation: 'bw-fadein 350ms ease forwards' }}>
           {/* Digest period */}
           <p className="mono" style={{ color: 'var(--on-surface-variant)', marginBottom: '32px' }}>
             Week of {new Date(digest.periodStart).toLocaleDateString('en-AU', { day: 'numeric', month: 'long', year: 'numeric' })}
@@ -152,6 +150,7 @@ export function IntelligencePage() {
                     key={tc.id}
                     rank={tc.rank}
                     data={{
+                      caseId: tc.caseId,
                       citation: tc.case.citation,
                       caseName: tc.case.caseName,
                       court: tc.case.court,
@@ -206,18 +205,21 @@ export function IntelligencePage() {
                   <SortButton active={extendedSort === 'date'} onClick={() => setExtendedSort('date')}>By Date</SortButton>
                 </div>
               </div>
-              <div>
+              <div style={{ borderRadius: 'var(--rounded-lg)', overflow: 'hidden', border: '1px solid var(--surface-dim)' }}>
                 {sortedExtended.map((ec, i) => (
                   <ExtendedCaseRow key={ec.id} ec={ec} alternate={i % 2 === 1} />
                 ))}
               </div>
             </section>
           )}
-        </>
+        </div>
       )}
 
       <style>{`
-        @keyframes spin { to { transform: rotate(360deg); } }
+        @keyframes bw-spin    { to { transform: rotate(360deg); } }
+        @keyframes bw-fadein  { from { opacity:0; transform:translateY(8px); } to { opacity:1; transform:translateY(0); } }
+        @keyframes bw-shimmer { 0% { background-position:-200% 0; } 100% { background-position:200% 0; } }
+        .bw-skeleton { background: linear-gradient(90deg, var(--surface-container) 0%, var(--surface-container-high) 50%, var(--surface-container) 100%); background-size:200% 100%; animation: bw-shimmer 1.6s ease-in-out infinite; }
       `}</style>
     </div>
   )
@@ -248,12 +250,13 @@ function ExtendedCaseRow({ ec, alternate }: { ec: ExtendedCase; alternate: boole
   const date = ec.case.decisionDate ? new Date(ec.case.decisionDate) : null
 
   return (
-    <div style={{ backgroundColor: alternate ? 'var(--surface-container-low)' : 'transparent' }}>
+    <div style={{ backgroundColor: alternate ? 'var(--surface-container-low)' : 'var(--surface-container-lowest)' }}>
       <button
         onClick={() => setExpanded((e) => !e)}
         style={{
           width: '100%', display: 'flex', alignItems: 'center', gap: '16px',
           padding: '14px 16px', background: 'none', border: 'none', cursor: 'pointer', textAlign: 'left',
+          transition: 'background-color 150ms',
         }}
       >
         {/* Date column */}
@@ -288,20 +291,41 @@ function ExtendedCaseRow({ ec, alternate }: { ec: ExtendedCase; alternate: boole
           <span className="mono" style={{ color: 'var(--on-surface-variant)', minWidth: '36px', textAlign: 'right' }}>
             {ec.significanceScore}/10
           </span>
-          {expanded
-            ? <ChevronUp size={14} color="var(--on-surface-variant)" />
-            : <ChevronDown size={14} color="var(--on-surface-variant)" />}
+          <ChevronDown
+            size={14}
+            color="var(--on-surface-variant)"
+            style={{ transform: expanded ? 'rotate(180deg)' : 'rotate(0deg)', transition: 'transform 250ms ease' }}
+          />
         </div>
       </button>
 
-      {expanded && (
-        <div style={{ padding: '0 16px 20px 72px' }}>
-          <p className="mono" style={{ color: 'var(--on-surface-variant)', marginBottom: '8px' }}>{ec.case.citation}</p>
-          <p className="body-md" style={{ color: 'var(--on-surface-variant)', fontStyle: 'italic' }}>
-            Full analysis available — run a new digest to see expanded brief.
-          </p>
+      {/* Smooth expand */}
+      <div
+        style={{
+          display: 'grid',
+          gridTemplateRows: expanded ? '1fr' : '0fr',
+          transition: 'grid-template-rows 280ms cubic-bezier(0.4, 0, 0.2, 1)',
+        }}
+      >
+        <div style={{ overflow: 'hidden' }}>
+          <div style={{ padding: '4px 16px 16px 72px', display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: '12px', flexWrap: 'wrap' }}>
+            <p className="mono" style={{ color: 'var(--on-surface-variant)', margin: 0 }}>{ec.case.citation}</p>
+            {ec.caseId && (
+              <Link
+                to={`/cases/${ec.caseId}`}
+                onClick={(e) => e.stopPropagation()}
+                style={{
+                  display: 'inline-flex', alignItems: 'center', gap: '4px',
+                  fontFamily: 'var(--font-sans)', fontSize: '12px', fontWeight: 600,
+                  color: 'var(--secondary-container)', textDecoration: 'none',
+                }}
+              >
+                View Analysis <ArrowRight size={11} />
+              </Link>
+            )}
+          </div>
         </div>
-      )}
+      </div>
     </div>
   )
 }
