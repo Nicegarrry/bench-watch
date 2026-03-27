@@ -123,7 +123,7 @@ job discoveryJob {
     fn: import { runDiscovery } from "@src/pipeline/discovery"
   },
   schedule: {
-    cron: "0 19 * * 0",
+    cron: "0 16 * * *", // 2am AEST (UTC+10) daily
     executorOptions: {
       pgBoss: {=json { "retryLimit": 2, "retryDelay": 300 } json=}
     }
@@ -136,7 +136,7 @@ job triageJob {
     fn: import { runTriage } from "@src/pipeline/triage"
   },
   schedule: {
-    cron: "0 20 * * 0",
+    cron: "0 17 * * *", // 3am AEST daily
     executorOptions: {
       pgBoss: {=json { "retryLimit": 2, "retryDelay": 300 } json=}
     }
@@ -149,7 +149,7 @@ job digestJob {
     fn: import { runDigests } from "@src/pipeline/userDigests"
   },
   schedule: {
-    cron: "0 21 * * 0",
+    cron: "0 18 * * *", // 4am AEST daily
     executorOptions: {
       pgBoss: {=json { "retryLimit": 1, "retryDelay": 300 } json=}
     }
@@ -184,6 +184,20 @@ api getArchiveApi {
   entities: [UserDigest, UserDigestTopCase, UserDigestExtendedCase, Case],
   auth: true,
   httpRoute: (GET, "/api/archive")
+}
+
+api getLatestDigestApi {
+  fn: import { getLatestDigestHandler } from "@src/api/intelligenceApi",
+  entities: [UserDigest, UserDigestTopCase, UserDigestExtendedCase, Case],
+  auth: true,
+  httpRoute: (GET, "/api/digest/latest")
+}
+
+api browseCasesApi {
+  fn: import { browseCasesHandler } from "@src/api/intelligenceApi",
+  entities: [Case, CaseAnalysis, CaseAreaTag, UserArea],
+  auth: true,
+  httpRoute: (GET, "/api/browse")
 }
 
 api getAreasApi {

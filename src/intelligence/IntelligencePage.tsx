@@ -41,11 +41,10 @@ export function IntelligencePage() {
   async function fetchLatestDigest() {
     setLoading(true); setError(null)
     try {
-      const res = await apiFetch('/api/archive?page=0')
+      const res = await apiFetch('/api/digest/latest')
       if (!res.ok) throw new Error(`HTTP ${res.status}`)
       const data = await res.json()
-      const latest = (data.digests as Digest[]).find((d) => d.status === 'completed') ?? null
-      setDigest(latest)
+      setDigest(data.digest ?? null)
     } catch (e: any) {
       setError(e.message ?? 'Failed to load')
     } finally {
@@ -59,7 +58,11 @@ export function IntelligencePage() {
       const res = await apiFetch('/api/run-digest', { method: 'POST' })
       const data = await res.json()
       if (!res.ok) throw new Error(data.message ?? `HTTP ${res.status}`)
-      setRunMsg('Briefing started — takes ~5 minutes. Refresh when done.')
+      if (data.fresh) {
+        setRunMsg('Brief is current — generated within the last 24 hours.')
+      } else {
+        setRunMsg('Refreshing your brief — takes ~5 minutes. Reload when done.')
+      }
     } catch (e: any) {
       setRunMsg(`Error: ${e.message}`)
     } finally {
@@ -97,7 +100,7 @@ export function IntelligencePage() {
           }}
         >
           {running && <Loader2 size={13} style={{ animation: 'bw-spin 1s linear infinite' }} />}
-          {running ? 'Starting…' : '+ New Briefing'}
+          {running ? 'Refreshing…' : 'Refresh Brief'}
         </button>
       </div>
 
@@ -123,9 +126,9 @@ export function IntelligencePage() {
 
       {!loading && !error && !digest && (
         <div style={{ textAlign: 'center', padding: '80px 0' }}>
-          <p className="title-md" style={{ color: 'var(--on-surface)', marginBottom: '8px' }}>No briefing available yet</p>
+          <p className="title-md" style={{ color: 'var(--on-surface)', marginBottom: '8px' }}>No brief available yet</p>
           <p className="body-md" style={{ color: 'var(--on-surface-variant)' }}>
-            Run the full pipeline from <a href="/dashboard" style={{ color: 'var(--secondary-container)' }}>/dashboard</a>, then click New Briefing above.
+            Your daily brief is prepared each night. Check back tomorrow morning, or click Refresh Brief to generate one now.
           </p>
         </div>
       )}
@@ -133,13 +136,13 @@ export function IntelligencePage() {
       {digest && (
         <div style={{ animation: 'bw-fadein 350ms ease forwards' }}>
           <p className="mono" style={{ color: 'var(--on-surface-variant)', marginBottom: '24px' }}>
-            Week of {new Date(digest.periodStart).toLocaleDateString('en-AU', { day: 'numeric', month: 'long', year: 'numeric' })}
-            {' '}·{' '}{digest.areaSlugs.length} practice areas
+            7-day view · {new Date(digest.periodStart).toLocaleDateString('en-AU', { day: 'numeric', month: 'short' })} – {new Date(digest.periodEnd).toLocaleDateString('en-AU', { day: 'numeric', month: 'short', year: 'numeric' })}
+            {' '}·{' '}{digest.areaSlugs.length} {digest.areaSlugs.length === 1 ? 'practice area' : 'practice areas'}
           </p>
 
           {/* Weekly Analysis — TOP */}
-          {digest.digestSummary && digest.digestSummary !== 'No relevant cases this week.' && (
-            <WeeklyAnalysisBox summary={digest.digestSummary} periodStart={digest.periodStart} />
+          {digest.digestSummary && digest.digestSummary !== 'No relevant cases this period.' && digest.digestSummary !== 'No relevant cases this week.' && (
+            <WeeklyAnalysisBox summary={digest.digestSummary} periodEnd={digest.periodEnd} />
           )}
 
           {/* Priority Cases — collapsible */}
@@ -233,8 +236,8 @@ export function IntelligencePage() {
 
 // ── Weekly Analysis Box ──────────────────────────────────────────────────────
 
-function WeeklyAnalysisBox({ summary, periodStart }: { summary: string; periodStart: string }) {
-  const weekOf = new Date(periodStart).toLocaleDateString('en-AU', { day: 'numeric', month: 'short', year: 'numeric' })
+function WeeklyAnalysisBox({ summary, periodEnd }: { summary: string; periodEnd: string }) {
+  const weekOf = new Date(periodEnd).toLocaleDateString('en-AU', { day: 'numeric', month: 'short', year: 'numeric' })
   const bullets = summary.split('. ').filter(Boolean)
 
   return (
@@ -253,7 +256,7 @@ function WeeklyAnalysisBox({ summary, periodStart }: { summary: string; periodSt
             fontFamily: 'var(--font-sans)', fontSize: '11px', fontWeight: 700,
             letterSpacing: '0.1rem', textTransform: 'uppercase', color: 'var(--secondary)',
           }}>
-            Weekly Analysis
+            Daily Brief
           </span>
         </div>
         <span style={{ fontFamily: 'var(--font-mono)', fontSize: '11px', color: 'rgba(255,255,255,0.4)' }}>

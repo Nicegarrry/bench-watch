@@ -28,9 +28,19 @@ export const runDigestHandler = async (req: any, res: any, context: any) => {
     user.dashboardRunsThisWeek = 0
   }
 
-  // Rate limit for free users
+  // If a digest was already generated in the last 23h, return it immediately (no AI cost)
+  const cutoff = new Date(Date.now() - 23 * 60 * 60 * 1000)
+  const recentDigest = await context.entities.UserDigest.findFirst({
+    where: { userId: user.id, status: 'completed', createdAt: { gte: cutoff } },
+    orderBy: { createdAt: 'desc' },
+  })
+  if (recentDigest) {
+    return res.status(200).json({ message: 'Brief is current', fresh: true, generatedAt: recentDigest.createdAt })
+  }
+
+  // Rate limit for free users (manual refresh requests beyond the daily auto-run)
   if (user.plan === 'free' && user.dashboardRunsThisWeek >= FREE_RUN_LIMIT) {
-    throw new HttpError(429, 'Weekly digest run limit reached. Upgrade to Pro for more runs.')
+    throw new HttpError(429, 'Manual refresh limit reached. Your brief is automatically updated each night.')
   }
 
   // Increment counter
@@ -45,5 +55,5 @@ export const runDigestHandler = async (req: any, res: any, context: any) => {
     console.error('[digestApi] Background digest failed:', err)
   )
 
-  res.status(202).json({ message: 'Digest generation started', runsUsed: user.dashboardRunsThisWeek + 1 })
+  res.status(202).json({ message: 'Refreshing your brief', runsUsed: user.dashboardRunsThisWeek + 1 })
 }

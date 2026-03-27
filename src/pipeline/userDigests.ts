@@ -13,7 +13,7 @@ const COURT_TIER: Record<string, 1 | 2 | 3> = {
   FCA:    3,
 }
 
-// WASP job handler
+// WASP job handler — runs nightly, skips users who already have a fresh digest today
 export const runDigests = async (_args: unknown, _context: unknown): Promise<void> => {
   const usersWithAreas = await prisma.user.findMany({
     where: {
@@ -23,10 +23,19 @@ export const runDigests = async (_args: unknown, _context: unknown): Promise<voi
     include: { userAreas: true },
   })
 
-  console.log(`[digests] Building digests for ${usersWithAreas.length} users.`)
+  console.log(`[digests] Building daily digests for ${usersWithAreas.length} users.`)
+
+  const cutoff = new Date(Date.now() - 23 * 60 * 60 * 1000)
 
   for (const user of usersWithAreas) {
     try {
+      const recent = await prisma.userDigest.findFirst({
+        where: { userId: user.id, status: 'completed', createdAt: { gte: cutoff } },
+      })
+      if (recent) {
+        console.log(`[digests] Skipping user ${user.id} — digest already current.`)
+        continue
+      }
       await buildAndSaveDigest(user.id, user.userAreas.map((ua) => ua.areaSlug))
       console.log(`[digests] ✓ User ${user.id}`)
     } catch (err) {
@@ -43,7 +52,7 @@ export async function buildAndSaveDigest(userId: string, areaSlugs: string[]): P
   const digest = await prisma.userDigest.create({
     data: {
       userId,
-      periodType: 'weekly',
+      periodType: 'daily',
       periodStart,
       periodEnd: now,
       areaSlugs,
@@ -67,7 +76,7 @@ export async function buildAndSaveDigest(userId: string, areaSlugs: string[]): P
     if (matchingCases.length === 0) {
       await prisma.userDigest.update({
         where: { id: digest.id },
-        data: { status: 'completed', digestSummary: 'No relevant cases this week.', completedAt: now },
+        data: { status: 'completed', digestSummary: 'No relevant cases this period.', completedAt: now },
       })
       return
     }

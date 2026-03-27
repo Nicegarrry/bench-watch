@@ -99,10 +99,10 @@ async function runDiscoveryCore(periodType: string, since: Date | null): Promise
   }
 }
 
-// WASP job handler — weekly scheduled run (last 7 days only)
+// WASP job handler — daily scheduled run (last 48h, safety buffer handles overlap)
 export const runDiscovery = async (_args: unknown, _context: unknown): Promise<void> => {
-  const since = new Date(Date.now() - 7 * 24 * 60 * 60 * 1000)
-  await runDiscoveryCore('weekly', since)
+  const since = new Date(Date.now() - 48 * 60 * 60 * 1000)
+  await runDiscoveryCore('daily', since)
 }
 
 // Backfill — fetches ALL items currently in JADE feeds regardless of date
