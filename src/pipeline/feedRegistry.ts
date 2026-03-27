@@ -8,7 +8,7 @@ export type FeedConfig = {
 // Confirmed working as of 25 March 2026
 export const JADE_FEEDS: FeedConfig[] = [
   { courtCode: 'HCA',    courtName: 'High Court of Australia',           feedUrl: 'https://jade.io/xml/au-hca.xml',     tier: 1 },
-  { courtCode: 'HCASJ',  courtName: 'High Court (Single Justice)',       feedUrl: 'https://jade.io/xml/au-hca-sj.xml',  tier: 1 },
+  { courtCode: 'HCASJ',  courtName: 'High Court (Single Justice)',       feedUrl: 'https://jade.io/xml/au-hca-sj.xml',  tier: 3 },
   { courtCode: 'FCAFC', courtName: 'Federal Court (Full Court)',         feedUrl: 'https://jade.io/xml/au-fca-fc.xml',  tier: 2 },
   { courtCode: 'FCA',   courtName: 'Federal Court of Australia',         feedUrl: 'https://jade.io/xml/au-fca.xml',     tier: 3 },
   { courtCode: 'NSWCA', courtName: 'NSW Court of Appeal',               feedUrl: 'https://jade.io/xml/au-nsw-ca.xml',  tier: 2 },
@@ -37,6 +37,7 @@ export const AUSTLII_MIRRORS = ['www6', 'www7', 'www8'] as const
 export const AUSTLII_COURT_PATHS: Record<string, string> = {
   HCA:    'cth/HCA',
   HCASJ:  'cth/HCA',
+  HCATRANS: 'cth/HCA',
   FCAFC:  'cth/FCAFC',
   FCA:    'cth/FCA',
   NSWCA:  'nsw/NSWCA',

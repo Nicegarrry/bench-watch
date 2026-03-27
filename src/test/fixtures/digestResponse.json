@@ -1,0 +1,32 @@
+{
+  "digestSummary": "This week saw a landmark High Court decision on separation of powers (Smith v Jones) and a significant procedural fairness ruling (Brown v State of NSW).",
+  "topCases": [
+    {
+      "citation": "[2026] HCA 15",
+      "rank": 1,
+      "factsSummary": "Challenge to legislation conferring judicial power on non-judicial body.",
+      "legalAnalysis": "Court held functions inherently judicial; conferral on non-Ch III body invalid.",
+      "whyItMatters": "Narrows scope for non-judicial adjudication.",
+      "significanceScore": 9,
+      "primaryArea": "constitutional"
+    },
+    {
+      "citation": "[2026] HCA 16",
+      "rank": 2,
+      "factsSummary": "Challenge to administrative decision on procedural fairness grounds.",
+      "legalAnalysis": "Court reinforced that procedural fairness requires opportunity to be heard.",
+      "whyItMatters": "Confirms high bar for denying hearing rights.",
+      "significanceScore": 7,
+      "primaryArea": "administrative"
+    }
+  ],
+  "extendedCases": [
+    {
+      "citation": "[2026] NSWCA 55",
+      "rank": 3,
+      "significanceScore": 6,
+      "primaryArea": "contract",
+      "oneLineSummary": "NSW Court of Appeal upheld damages assessment methodology for breach of commercial lease."
+    }
+  ]
+}

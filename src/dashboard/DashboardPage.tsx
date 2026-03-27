@@ -79,7 +79,7 @@ export function DashboardPage() {
             run(
               () => triggerDiscovery({}),
               setDiscovery,
-              "Discovery complete — check Supabase cases table."
+              "Discovery complete — check cases table."
             )
           }
         />

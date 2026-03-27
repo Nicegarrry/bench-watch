@@ -11,7 +11,7 @@ const BATCH_SIZE = 30
 // Court tier mapping for significance scoring
 const COURT_TIER: Record<string, 1 | 2 | 3> = {
   HCA:    1,
-  HCASJ:  1,
+  HCASJ:  3,
   FCAFC:  2,
   NSWCA:  2,
   NSWCCA: 2,

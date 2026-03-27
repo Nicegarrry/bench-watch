@@ -1,3 +1,0 @@
--- This migration was originally generated for SQLite and has been superseded.
--- All schema creation is handled by 20260325055950_initial_postgres_pipeline.
--- Kept as a no-op so Prisma's migration history remains intact.

@@ -2,15 +2,50 @@
 
 ## What This Is
 
-BenchWatch is an Australian legal intelligence dashboard and weekly email digest.
+BenchWatch is an Australian legal intelligence dashboard and daily email digest.
 It monitors every major Australian appellate court, discovers new decisions via RSS,
 uses AI to identify the most significant ones, generates case analyses, and delivers
 personalised digests to users based on their chosen areas of law.
 
-**Stack:** Wasp framework · Supabase (Postgres + auth) · Railway (server) · Vercel (client SPA) · Stripe · Resend (email)
+**Stack:** Wasp 0.21 · Postgres (Supabase prod / Docker local) · Railway (server) · Vercel (client SPA) · Stripe · Resend (email)
 
 **Lovable prototype exists** for user testing only — this is the real build. Don't
 reference or mirror the Lovable codebase.
+
+---
+
+## Development Environment (Current Machine)
+
+- **macOS 25.4.0** (Darwin, Apple Silicon assumed)
+- **Node 22.22.2**, **Docker 29.3.1** available
+- **Wasp CLI** installed (run `wasp start` for dev)
+- **No psql** client installed locally — use `wasp db studio` for DB inspection
+- Previously developed on macOS 12 without Docker — used Supabase directly as dev DB
+
+### Local Dev Setup
+```bash
+# 1. Start Wasp's Docker-managed Postgres (new — previously used Supabase directly)
+wasp start db
+
+# 2. Create .env.server with required vars
+#    DATABASE_URL=<from wasp start db output, or Supabase connection string>
+#    ANTHROPIC_API_KEY=sk-ant-...
+
+# 3. Run migrations
+wasp db migrate-dev
+
+# 4. Seed law areas + RSS feeds
+wasp db seed
+
+# 5. Start dev server (client :3000 + server :3001)
+wasp start
+```
+
+### Known Housekeeping
+- **Stray `migrations/` at project root** — created by running `npx prisma migrate dev` directly instead of `wasp db migrate-dev`. Canonical migrations are in `.wasp/out/db/migrations/`. The root `migrations/` folder should be deleted.
+- **Email provider is `Dummy`** in `main.wasp` — no emails actually send. Switch to Resend/SendGrid before production.
+- **No `.env.server` file exists** — must be created with `DATABASE_URL` and `ANTHROPIC_API_KEY`.
+- **Tests:** `npm test` runs vitest. 49 tests across 6 files covering pipeline functions (unit + integration with mocked externals). Test files live in `src/pipeline/__tests__/`, fixtures in `src/test/fixtures/`.
 
 ---
 
@@ -117,11 +152,11 @@ NTCA           → nt
 
 ---
 
-## Pipeline Scheduling (Cron — Sunday AEST)
+## Pipeline Scheduling (Cron — Daily AEST)
 ```
-05:00 — Phase 1: RSS polling (shared, runs once)
-06:00 — Phase 2: Triage + text retrieval + analysis
-07:00 — Phase 3: Per-user cross-prioritisation + email sends
+02:00 — Phase 1: RSS polling (shared, runs once)       [UTC 16:00]
+03:00 — Phase 2: Triage + text retrieval + analysis     [UTC 17:00]
+04:00 — Phase 3: Per-user cross-prioritisation + email  [UTC 18:00]
 ```
 
 **Each phase must be a background worker/job, not a single synchronous function.**
@@ -302,7 +337,7 @@ cd .wasp/build/server && railway up  # deploy server to Railway
 **Env vars needed on Railway:** `DATABASE_URL`, `ANTHROPIC_API_KEY`, `WASP_SERVER_URL`,
 `WASP_WEB_CLIENT_URL`, `JWT_SECRET`
 
-**Dev: still on localhost** — `wasp start` handles everything locally.
+**Dev:** `wasp start db` for Docker Postgres + `wasp start` for app. Docker is now available on this machine (previously wasn't on macOS 12).
 
 ---
 

@@ -7,7 +7,7 @@ const anthropic = new Anthropic({ apiKey: process.env.ANTHROPIC_API_KEY })
 const MAX_CASES_PER_DIGEST = 40
 
 const COURT_TIER: Record<string, 1 | 2 | 3> = {
-  HCA:    1, HCASJ: 1,
+  HCA:    1, HCASJ: 3,
   FCAFC:  2, NSWCA: 2, NSWCCA: 2, VSCA: 2, QCA: 2,
   WASCA:  2, SASCFC: 2, TASFC: 2, ACTCA: 2, NTCA: 2,
   FCA:    3,

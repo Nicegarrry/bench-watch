@@ -1,0 +1,26 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<rss version="2.0">
+  <channel>
+    <title>JADE - High Court of Australia</title>
+    <link>https://jade.io</link>
+    <description>Recent decisions</description>
+    <item>
+      <title>Smith v Jones [2026] HCA 15</title>
+      <link>https://jade.io/article/12345</link>
+      <pubDate>Mon, 23 Mar 2026 00:00:00 +1100</pubDate>
+      <description>Constitutional law — Separation of powers — Validity of legislation</description>
+    </item>
+    <item>
+      <title>Brown v State of NSW [2026] HCA 16</title>
+      <link>https://jade.io/article/12346</link>
+      <pubDate>Tue, 24 Mar 2026 00:00:00 +1100</pubDate>
+      <description>Administrative law — Judicial review — Procedural fairness</description>
+    </item>
+    <item>
+      <title>Old Case [2025] HCA 99</title>
+      <link>https://jade.io/article/11000</link>
+      <pubDate>Mon, 01 Jan 2025 00:00:00 +1100</pubDate>
+      <description>Contract — Breach — Damages</description>
+    </item>
+  </channel>
+</rss>

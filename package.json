@@ -31,6 +31,11 @@
     "prisma": "5.19.1",
     "typescript": "5.8.2",
     "typescript-eslint": "^8.32.1",
-    "vite": "^7.0.6"
+    "vite": "^7.0.6",
+    "vitest": "^3.2.0"
+  },
+  "scripts": {
+    "test": "vitest run",
+    "test:watch": "vitest"
   }
 }
