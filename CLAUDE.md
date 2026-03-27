@@ -47,6 +47,26 @@ wasp start
 - **No `.env.server` file exists** — must be created with `DATABASE_URL` and `ANTHROPIC_API_KEY`.
 - **Tests:** `npm test` runs vitest. 49 tests across 6 files covering pipeline functions (unit + integration with mocked externals). Test files live in `src/pipeline/__tests__/`, fixtures in `src/test/fixtures/`.
 
+### Database Connection (Dev — Supabase Session Pooler)
+
+**Current dev setup uses Supabase session pooler directly** (not local Docker). Two separate connection strings are needed because Prisma and pg-boss have different requirements:
+
+- **Prisma** needs `?pgbouncer=true` on the pooler URL to use simple query protocol
+- **pg-boss** uses the raw `pg` library which doesn't understand `?pgbouncer=true` — passing it causes repeated auth failures that trip Supabase's circuit breaker, taking down all DB connections including session lookups
+
+**Fix:** Use `PG_BOSS_NEW_OPTIONS` env var (Wasp's built-in escape hatch) to give pg-boss a clean connection string without the problematic param:
+
+```
+DATABASE_URL="postgresql://[user]:[pass]@[host]:5432/postgres?pgbouncer=true"
+PG_BOSS_NEW_OPTIONS='{"connectionString":"postgresql://[user]:[pass]@[host]:5432/postgres","ssl":{"rejectUnauthorized":false}}'
+```
+
+The `rejectUnauthorized: false` is needed because Supabase's pooler uses a self-signed cert chain that Node.js rejects by default. This is acceptable for dev only.
+
+**Symptom of circuit breaker being open:** `/auth/me` starts returning 500 with `FATAL: Circuit breaker open: Too many authentication errors`. Waits ~5–10 min to reset on its own. Fix is the above `PG_BOSS_NEW_OPTIONS` config.
+
+**Direct connection (`db.[ref].supabase.co:5432`) does not work from this machine** — likely IPv6/firewall. Don't attempt it for local dev.
+
 ---
 
 ## Core Architecture: Three-Phase Pipeline
@@ -338,6 +358,16 @@ cd .wasp/build/server && railway up  # deploy server to Railway
 `WASP_WEB_CLIENT_URL`, `JWT_SECRET`
 
 **Dev:** `wasp start db` for Docker Postgres + `wasp start` for app. Docker is now available on this machine (previously wasn't on macOS 12).
+
+### Pre-Deployment Checklist (Before Railway Deploy)
+
+1. **DATABASE_URL on Railway** — use Supabase **direct connection URL** (`postgresql://postgres:[pass]@db.[ref].supabase.co:5432/postgres`), not the pooler. Server-to-server from Railway works fine without pgbouncer. Do NOT set `PG_BOSS_NEW_OPTIONS` on Railway — pg-boss and Prisma can both use the direct URL without special handling.
+2. **Remove `?pgbouncer=true`** from `DATABASE_URL` on Railway — not needed for direct connections.
+3. **Switch email provider** from `Dummy` to Resend in `main.wasp` and add `RESEND_API_KEY` to Railway env vars.
+4. **Add `STRIPE_SECRET_KEY`** and `STRIPE_WEBHOOK_SECRET` when Stripe is wired up.
+5. **`JWT_SECRET`** — generate a strong random value (`openssl rand -hex 32`).
+6. **`WASP_SERVER_URL`** — set to the Railway app URL (e.g. `https://bench-watch.up.railway.app`).
+7. **`WASP_WEB_CLIENT_URL`** — set to the Vercel client URL.
 
 ---
 
