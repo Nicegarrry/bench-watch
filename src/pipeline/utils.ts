@@ -71,8 +71,8 @@ async function callWithRetry(
     try {
       return await anthropic.messages.create(params) as Anthropic.Message
     } catch (err: any) {
-      const isRateLimit = err?.status === 429
-      if (!isRateLimit || attempt === MAX_RETRIES) throw err
+      const isRetryable = err?.status === 429 || err?.status === 529
+      if (!isRetryable || attempt === MAX_RETRIES) throw err
 
       // Parse retry-after header (seconds) or fall back to exponential backoff
       const retryAfterHeader = err?.headers?.['retry-after']
@@ -80,7 +80,8 @@ async function callWithRetry(
         ? parseInt(retryAfterHeader, 10) * 1000
         : Math.min(60000, 5000 * Math.pow(2, attempt))
 
-      console.warn(`[callClaude] Rate limited. Waiting ${waitMs / 1000}s before retry ${attempt + 1}/${MAX_RETRIES}...`)
+      const reason = err?.status === 529 ? 'Overloaded' : 'Rate limited'
+      console.warn(`[callClaude] ${reason}. Waiting ${waitMs / 1000}s before retry ${attempt + 1}/${MAX_RETRIES}...`)
       await sleep(waitMs)
     }
   }

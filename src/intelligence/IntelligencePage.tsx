@@ -8,6 +8,8 @@ import { AreaTag } from '../shared/components/AreaTag'
 import { SkeletonIntelligencePage } from '../shared/components/Skeleton'
 import { ChevronDown, ChevronRight, Loader2, BarChart2 } from 'lucide-react'
 
+type Period = '1d' | '7d' | '30d'
+
 type TopCase = {
   id: string; rank: number; caseId: string
   factsSummary: string; legalAnalysis: string; whyItMatters: string
@@ -26,9 +28,22 @@ type Digest = {
   topCases: TopCase[]; extendedCases: ExtendedCase[]
 }
 
+type BrowseCase = {
+  id: string; citation: string; caseName: string; court: string; courtCode?: string
+  decisionDate?: string; catchwords?: string | null; jadeUrl?: string | null; austliiUrl?: string | null
+  caseAnalysis: {
+    significanceScore: number; primaryArea: string
+    whyItMatters: string; factsSummary: string; legalAnalysis: string
+  } | null
+}
+
+const PERIOD_LABELS: Record<Period, string> = { '1d': '24 Hours', '7d': '7 Days', '30d': '30 Days' }
+
 export function IntelligencePage() {
   const { data: _user } = useAuth()
+  const [period, setPeriod] = useState<Period>('7d')
   const [digest, setDigest] = useState<Digest | null>(null)
+  const [browseCases, setBrowseCases] = useState<BrowseCase[]>([])
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)
   const [running, setRunning] = useState(false)
@@ -36,15 +51,23 @@ export function IntelligencePage() {
   const [extendedSort, setExtendedSort] = useState<'significance' | 'date'>('significance')
   const [heroExpanded, setHeroExpanded] = useState(true)
 
-  useEffect(() => { fetchLatestDigest() }, [])
+  useEffect(() => { fetchForPeriod(period) }, [period])
 
-  async function fetchLatestDigest() {
+  async function fetchForPeriod(p: Period) {
     setLoading(true); setError(null)
     try {
-      const res = await apiFetch('/api/digest/latest')
-      if (!res.ok) throw new Error(`HTTP ${res.status}`)
-      const data = await res.json()
-      setDigest(data.digest ?? null)
+      if (p === '7d') {
+        const res = await apiFetch('/api/digest/latest')
+        if (!res.ok) throw new Error(`HTTP ${res.status}`)
+        const data = await res.json()
+        setDigest(data.digest ?? null)
+      } else {
+        const days = p === '1d' ? 2 : 30
+        const res = await apiFetch(`/api/browse?days=${days}`)
+        if (!res.ok) throw new Error(`HTTP ${res.status}`)
+        const data = await res.json()
+        setBrowseCases(data.cases ?? [])
+      }
     } catch (e: any) {
       setError(e.message ?? 'Failed to load')
     } finally {
@@ -82,26 +105,60 @@ export function IntelligencePage() {
   return (
     <div>
       {/* Page header */}
-      <div style={{ display: 'flex', alignItems: 'flex-start', justifyContent: 'space-between', gap: '16px', marginBottom: '28px' }}>
+      <div style={{ display: 'flex', alignItems: 'flex-start', justifyContent: 'space-between', gap: '16px', marginBottom: '20px' }}>
         <BriefHeader label="Critical Updates" title="Priority Insights" />
-        <button
-          onClick={triggerRun}
-          disabled={running}
-          style={{
-            flexShrink: 0,
-            padding: '9px 20px',
-            background: 'linear-gradient(135deg, var(--primary) 0%, var(--primary-container) 100%)',
-            border: 'none',
+        <div style={{ display: 'flex', alignItems: 'center', gap: '12px', flexShrink: 0 }}>
+          {/* Period selector */}
+          <div style={{
+            display: 'flex', gap: '2px', padding: '3px',
+            backgroundColor: 'var(--surface-container-low)',
             borderRadius: 'var(--rounded-md)',
-            fontFamily: 'var(--font-sans)', fontSize: '13px', fontWeight: 600,
-            color: '#ffffff', cursor: running ? 'not-allowed' : 'pointer',
-            opacity: running ? 0.6 : 1,
-            display: 'flex', alignItems: 'center', gap: '6px',
-          }}
-        >
-          {running && <Loader2 size={13} style={{ animation: 'bw-spin 1s linear infinite' }} />}
-          {running ? 'Refreshing…' : 'Refresh Brief'}
-        </button>
+          }}>
+            {(['1d', '7d', '30d'] as Period[]).map((p) => (
+              <button
+                key={p}
+                onClick={() => setPeriod(p)}
+                className="label-sm"
+                style={{
+                  padding: '5px 11px',
+                  border: 'none',
+                  borderRadius: 'calc(var(--rounded-md) - 2px)',
+                  cursor: 'pointer',
+                  backgroundColor: period === p ? 'var(--surface-container-highest)' : 'transparent',
+                  color: period === p ? 'var(--on-surface)' : 'var(--on-surface-variant)',
+                  fontWeight: period === p ? 600 : 400,
+                  transition: 'all 150ms',
+                  whiteSpace: 'nowrap',
+                }}
+              >
+                {PERIOD_LABELS[p]}
+                {p === '7d' && (
+                  <span style={{
+                    marginLeft: '5px', fontSize: '9px', fontWeight: 700,
+                    letterSpacing: '0.05rem', color: period === p ? 'var(--secondary-container)' : 'var(--on-surface-variant)',
+                  }}>AI</span>
+                )}
+              </button>
+            ))}
+          </div>
+          <button
+            onClick={triggerRun}
+            disabled={running}
+            style={{
+              padding: '9px 20px',
+              background: 'linear-gradient(135deg, var(--primary) 0%, var(--primary-container) 100%)',
+              border: 'none',
+              borderRadius: 'var(--rounded-md)',
+              fontFamily: 'var(--font-sans)', fontSize: '13px', fontWeight: 600,
+              color: '#ffffff', cursor: running ? 'not-allowed' : 'pointer',
+              opacity: running ? 0.6 : 1,
+              display: 'flex', alignItems: 'center', gap: '6px',
+            }}
+          >
+            {running && <Loader2 size={13} style={{ animation: 'bw-spin 1s linear infinite' }} />}
+            {running ? 'Refreshing…' : 'Refresh Brief'}
+          </button>
+        </div>
       </div>
 
       {runMsg && (
@@ -124,103 +181,148 @@ export function IntelligencePage() {
         </div>
       )}
 
-      {!loading && !error && !digest && (
-        <div style={{ textAlign: 'center', padding: '80px 0' }}>
-          <p className="title-md" style={{ color: 'var(--on-surface)', marginBottom: '8px' }}>No brief available yet</p>
-          <p className="body-md" style={{ color: 'var(--on-surface-variant)' }}>
-            Your daily brief is prepared each night. Check back tomorrow morning, or click Refresh Brief to generate one now.
-          </p>
-        </div>
-      )}
-
-      {digest && (
-        <div style={{ animation: 'bw-fadein 350ms ease forwards' }}>
-          <p className="mono" style={{ color: 'var(--on-surface-variant)', marginBottom: '24px' }}>
-            7-day view · {new Date(digest.periodStart).toLocaleDateString('en-AU', { day: 'numeric', month: 'short' })} – {new Date(digest.periodEnd).toLocaleDateString('en-AU', { day: 'numeric', month: 'short', year: 'numeric' })}
-            {' '}·{' '}{digest.areaSlugs.length} {digest.areaSlugs.length === 1 ? 'practice area' : 'practice areas'}
-          </p>
-
-          {/* Weekly Analysis — TOP */}
-          {digest.digestSummary && digest.digestSummary !== 'No relevant cases this period.' && digest.digestSummary !== 'No relevant cases this week.' && (
-            <WeeklyAnalysisBox summary={digest.digestSummary} periodEnd={digest.periodEnd} />
+      {/* 7-day AI digest view */}
+      {!loading && !error && period === '7d' && (
+        <>
+          {!digest && (
+            <div style={{ textAlign: 'center', padding: '80px 0' }}>
+              <p className="title-md" style={{ color: 'var(--on-surface)', marginBottom: '8px' }}>No brief available yet</p>
+              <p className="body-md" style={{ color: 'var(--on-surface-variant)' }}>
+                Your daily brief is prepared each night. Check back tomorrow morning, or click Refresh Brief to generate one now.
+              </p>
+            </div>
           )}
 
-          {/* Priority Cases — collapsible */}
-          {digest.topCases.length > 0 && (
-            <section style={{ marginBottom: '48px' }}>
-              <button
-                onClick={() => setHeroExpanded((e) => !e)}
-                style={{
-                  width: '100%', display: 'flex', alignItems: 'center', justifyContent: 'space-between',
-                  background: 'none', border: 'none', cursor: 'pointer',
-                  marginBottom: heroExpanded ? '20px' : '0',
-                  padding: '0', textAlign: 'left',
-                }}
-              >
-                <h2 className="headline-md" style={{ margin: 0, color: 'var(--on-surface)' }}>Priority Cases</h2>
-                <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
-                  <span className="label-sm" style={{ color: 'var(--on-surface-variant)' }}>
-                    {digest.topCases.length} {digest.topCases.length === 1 ? 'case' : 'cases'}
-                  </span>
-                  <ChevronDown
-                    size={16}
-                    color="var(--on-surface-variant)"
-                    style={{ transform: heroExpanded ? 'none' : 'rotate(-90deg)', transition: 'transform 200ms ease' }}
-                  />
-                </div>
-              </button>
+          {digest && (
+            <div style={{ animation: 'bw-fadein 350ms ease forwards' }}>
+              <p className="mono" style={{ color: 'var(--on-surface-variant)', marginBottom: '24px' }}>
+                7-day view · {new Date(digest.periodStart).toLocaleDateString('en-AU', { day: 'numeric', month: 'short' })} – {new Date(digest.periodEnd).toLocaleDateString('en-AU', { day: 'numeric', month: 'short', year: 'numeric' })}
+                {' '}·{' '}{digest.areaSlugs.length} {digest.areaSlugs.length === 1 ? 'practice area' : 'practice areas'}
+              </p>
 
-              <div style={{
-                display: 'grid',
-                gridTemplateRows: heroExpanded ? '1fr' : '0fr',
-                transition: 'grid-template-rows 300ms cubic-bezier(0.4, 0, 0.2, 1)',
-              }}>
-                <div style={{ overflow: 'hidden' }}>
-                  <div style={{ display: 'flex', flexDirection: 'column', gap: '28px' }}>
-                    {digest.topCases.map((tc) => (
-                      <CaseCard
-                        key={tc.id}
-                        rank={tc.rank}
-                        data={{
-                          caseId: tc.caseId,
-                          citation: tc.case.citation,
-                          caseName: tc.case.caseName,
-                          court: tc.case.court,
-                          courtCode: tc.case.courtCode,
-                          decisionDate: tc.case.decisionDate,
-                          catchwords: tc.case.catchwords,
-                          jadeUrl: tc.case.jadeUrl,
-                          austliiUrl: tc.case.austliiUrl,
-                          factsSummary: tc.factsSummary,
-                          legalAnalysis: tc.legalAnalysis,
-                          whyItMatters: tc.whyItMatters,
-                          significanceScore: tc.significanceScore,
-                          primaryArea: tc.primaryArea,
-                        }}
+              {digest.digestSummary && digest.digestSummary !== 'No relevant cases this period.' && digest.digestSummary !== 'No relevant cases this week.' && (
+                <WeeklyAnalysisBox summary={digest.digestSummary} periodEnd={digest.periodEnd} />
+              )}
+
+              {digest.topCases.length > 0 && (
+                <section style={{ marginBottom: '48px' }}>
+                  <button
+                    onClick={() => setHeroExpanded((e) => !e)}
+                    style={{
+                      width: '100%', display: 'flex', alignItems: 'center', justifyContent: 'space-between',
+                      background: 'none', border: 'none', cursor: 'pointer',
+                      marginBottom: heroExpanded ? '20px' : '0',
+                      padding: '0', textAlign: 'left',
+                    }}
+                  >
+                    <h2 className="headline-md" style={{ margin: 0, color: 'var(--on-surface)' }}>Priority Cases</h2>
+                    <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+                      <span className="label-sm" style={{ color: 'var(--on-surface-variant)' }}>
+                        {digest.topCases.length} {digest.topCases.length === 1 ? 'case' : 'cases'}
+                      </span>
+                      <ChevronDown
+                        size={16}
+                        color="var(--on-surface-variant)"
+                        style={{ transform: heroExpanded ? 'none' : 'rotate(-90deg)', transition: 'transform 200ms ease' }}
                       />
+                    </div>
+                  </button>
+
+                  <div style={{
+                    display: 'grid',
+                    gridTemplateRows: heroExpanded ? '1fr' : '0fr',
+                    transition: 'grid-template-rows 300ms cubic-bezier(0.4, 0, 0.2, 1)',
+                  }}>
+                    <div style={{ overflow: 'hidden' }}>
+                      <div style={{ display: 'flex', flexDirection: 'column', gap: '28px' }}>
+                        {digest.topCases.map((tc) => (
+                          <CaseCard
+                            key={tc.id}
+                            rank={tc.rank}
+                            data={{
+                              caseId: tc.caseId,
+                              citation: tc.case.citation,
+                              caseName: tc.case.caseName,
+                              court: tc.case.court,
+                              courtCode: tc.case.courtCode,
+                              decisionDate: tc.case.decisionDate,
+                              catchwords: tc.case.catchwords,
+                              jadeUrl: tc.case.jadeUrl,
+                              austliiUrl: tc.case.austliiUrl,
+                              factsSummary: tc.factsSummary,
+                              legalAnalysis: tc.legalAnalysis,
+                              whyItMatters: tc.whyItMatters,
+                              significanceScore: tc.significanceScore,
+                              primaryArea: tc.primaryArea,
+                            }}
+                          />
+                        ))}
+                      </div>
+                    </div>
+                  </div>
+                </section>
+              )}
+
+              {sortedExtended.length > 0 && (
+                <section>
+                  <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '16px' }}>
+                    <h2 className="headline-md" style={{ margin: 0, color: 'var(--on-surface)' }}>Also Notable</h2>
+                    <div style={{ display: 'flex', gap: '4px' }}>
+                      <SortButton active={extendedSort === 'significance'} onClick={() => setExtendedSort('significance')}>By Significance</SortButton>
+                      <SortButton active={extendedSort === 'date'} onClick={() => setExtendedSort('date')}>By Date</SortButton>
+                    </div>
+                  </div>
+                  <div style={{ borderRadius: 'var(--rounded-lg)', overflow: 'hidden', border: '1px solid var(--surface-dim)' }}>
+                    {sortedExtended.map((ec, i) => (
+                      <NotableRow key={ec.id} ec={ec} alternate={i % 2 === 1} />
                     ))}
                   </div>
-                </div>
-              </div>
-            </section>
+                </section>
+              )}
+            </div>
           )}
+        </>
+      )}
 
-          {/* Also Notable — flat rows, direct links */}
-          {sortedExtended.length > 0 && (
-            <section>
-              <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '16px' }}>
-                <h2 className="headline-md" style={{ margin: 0, color: 'var(--on-surface)' }}>Also Notable</h2>
-                <div style={{ display: 'flex', gap: '4px' }}>
-                  <SortButton active={extendedSort === 'significance'} onClick={() => setExtendedSort('significance')}>By Significance</SortButton>
-                  <SortButton active={extendedSort === 'date'} onClick={() => setExtendedSort('date')}>By Date</SortButton>
-                </div>
-              </div>
-              <div style={{ borderRadius: 'var(--rounded-lg)', overflow: 'hidden', border: '1px solid var(--surface-dim)' }}>
-                {sortedExtended.map((ec, i) => (
-                  <NotableRow key={ec.id} ec={ec} alternate={i % 2 === 1} />
-                ))}
-              </div>
-            </section>
+      {/* 1-day / 30-day browse view */}
+      {!loading && !error && period !== '7d' && (
+        <div style={{ animation: 'bw-fadein 350ms ease forwards' }}>
+          <p className="mono" style={{ color: 'var(--on-surface-variant)', marginBottom: '24px' }}>
+            {PERIOD_LABELS[period]} · sorted by significance · {browseCases.length} {browseCases.length === 1 ? 'case' : 'cases'}
+          </p>
+
+          {browseCases.length === 0 ? (
+            <div style={{ textAlign: 'center', padding: '80px 0' }}>
+              <p className="title-md" style={{ color: 'var(--on-surface)', marginBottom: '8px' }}>No cases in this period</p>
+              <p className="body-md" style={{ color: 'var(--on-surface-variant)' }}>
+                No analysed decisions match your areas in the last {period === '1d' ? '48 hours' : '30 days'}.
+              </p>
+            </div>
+          ) : (
+            <div style={{ display: 'flex', flexDirection: 'column', gap: '28px' }}>
+              {browseCases.map((c, i) => c.caseAnalysis && (
+                <CaseCard
+                  key={c.id}
+                  rank={i + 1}
+                  data={{
+                    caseId: c.id,
+                    citation: c.citation,
+                    caseName: c.caseName,
+                    court: c.court,
+                    courtCode: c.courtCode,
+                    decisionDate: c.decisionDate,
+                    catchwords: c.catchwords ?? undefined,
+                    jadeUrl: c.jadeUrl,
+                    austliiUrl: c.austliiUrl,
+                    factsSummary: c.caseAnalysis.factsSummary,
+                    legalAnalysis: c.caseAnalysis.legalAnalysis,
+                    whyItMatters: c.caseAnalysis.whyItMatters,
+                    significanceScore: c.caseAnalysis.significanceScore,
+                    primaryArea: c.caseAnalysis.primaryArea,
+                  }}
+                />
+              ))}
+            </div>
           )}
         </div>
       )}

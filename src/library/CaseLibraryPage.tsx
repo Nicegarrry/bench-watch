@@ -1,5 +1,5 @@
 import { useEffect, useState, useMemo } from 'react'
-import { Link, useSearchParams } from 'react-router'
+import { Link, useSearchParams, useLocation } from 'react-router'
 import { apiFetch } from '../shared/apiFetch'
 import { BriefHeader } from '../shared/components/BriefHeader'
 import { AreaTag, AREA_LABELS } from '../shared/components/AreaTag'
@@ -15,6 +15,7 @@ type CaseSummary = {
 
 export function CaseLibraryPage() {
   const [searchParams, setSearchParams] = useSearchParams()
+  const location = useLocation()
   const [search, setSearch] = useState(searchParams.get('q') ?? '')
   const [selectedArea, setSelectedArea] = useState<string | null>(searchParams.get('area') ?? null)
   const [allCases, setAllCases] = useState<CaseSummary[]>([])
@@ -27,6 +28,12 @@ export function CaseLibraryPage() {
       .catch(() => {})
       .finally(() => setLoading(false))
   }, [])
+
+  // Sync search/area from URL when navigating here from the topbar search
+  useEffect(() => {
+    setSearch(searchParams.get('q') ?? '')
+    setSelectedArea(searchParams.get('area') ?? null)
+  }, [location.key])
 
   // Sync URL params as user filters
   useEffect(() => {

@@ -1,9 +1,10 @@
-import { useEffect, useState } from 'react'
+import { useEffect, useRef, useState } from 'react'
 import { Link, useLocation, useNavigate } from 'react-router'
-import { useAuth } from 'wasp/client/auth'
+import { useAuth, logout } from 'wasp/client/auth'
 import { apiFetch } from '../apiFetch'
 import {
-  Scale, Archive, BookMarked, BookOpen, FileText, HelpCircle, Bell, Settings, Search, Menu, Loader2,
+  Scale, Archive, BookMarked, BookOpen, FileText, ScrollText,
+  Bell, Search, Menu, ChevronLeft, ChevronRight, LogOut, Settings,
 } from 'lucide-react'
 
 type NavItem = {
@@ -14,54 +15,93 @@ type NavItem = {
 }
 
 const NAV_ITEMS: NavItem[] = [
-  { label: 'Intelligence',  icon: <Scale size={16} />,      href: '/intelligence' },
-  { label: 'Case Library',  icon: <BookMarked size={16} />, href: '/library' },
-  { label: 'Archive',       icon: <Archive size={16} />,    href: '/archive' },
-  { label: 'Citations',     icon: <BookOpen size={16} />,   href: '/citations', disabled: true },
-  { label: 'Reports',       icon: <FileText size={16} />,   href: '/reports',   disabled: true },
+  { label: 'Intelligence',  icon: <Scale size={16} />,       href: '/intelligence' },
+  { label: 'Case Library',  icon: <BookMarked size={16} />,  href: '/library' },
+  { label: 'Legislation',   icon: <ScrollText size={16} />,  href: '/legislation' },
+  { label: 'Archive',       icon: <Archive size={16} />,     href: '/archive' },
+  { label: 'Citations',     icon: <BookOpen size={16} />,    href: '/citations', disabled: true },
+  { label: 'Reports',       icon: <FileText size={16} />,    href: '/reports',   disabled: true },
 ]
+
+type NotifCase = {
+  id: string
+  significanceScore: number
+  primaryArea: string
+  case: { id: string; citation: string; caseName: string; courtCode?: string }
+}
 
 export function AppLayout({ children }: { children: React.ReactNode }) {
   const { data: user } = useAuth()
   const location = useLocation()
   const navigate = useNavigate()
+
   const [mobileOpen, setMobileOpen] = useState(false)
   const [topSearch, setTopSearch] = useState('')
-  const [briefRunning, setBriefRunning] = useState(false)
-  const [briefMsg, setBriefMsg] = useState<string | null>(null)
 
-  // Track desktop/tablet/mobile and collapsed state
+  // Sidebar collapse
   const [isDesktop, setIsDesktop] = useState(() => typeof window !== 'undefined' ? window.innerWidth >= 768 : true)
   const [collapsed, setCollapsed] = useState(() => typeof window !== 'undefined' ? window.innerWidth < 1024 : false)
+
+  // Account dropdown
+  const [accountOpen, setAccountOpen] = useState(false)
+  const accountRef = useRef<HTMLDivElement>(null)
+
+  // Notifications
+  const [notifOpen, setNotifOpen] = useState(false)
+  const [notifCount, setNotifCount] = useState(0)
+  const [notifItems, setNotifItems] = useState<NotifCase[]>([])
+  const notifRef = useRef<HTMLDivElement>(null)
 
   useEffect(() => {
     function onResize() {
       const w = window.innerWidth
       setIsDesktop(w >= 768)
-      // Auto-collapse at <1024px; don't force expand when user manually toggled
       if (w < 1024) setCollapsed(true)
     }
     window.addEventListener('resize', onResize)
     return () => window.removeEventListener('resize', onResize)
   }, [])
 
-  const initials = (user?.getFirstProviderUserId() ?? '?').slice(0, 2).toUpperCase()
+  // Fetch notification count on mount
+  useEffect(() => {
+    apiFetch('/api/notifications')
+      .then((r) => r.json())
+      .then((d) => { setNotifItems(d.cases ?? []); setNotifCount(d.count ?? 0) })
+      .catch(() => {})
+  }, [])
 
-  const sidebarWidth = collapsed ? '64px' : '220px'
+  // Click-away for both dropdowns
+  useEffect(() => {
+    function handleClick(e: MouseEvent) {
+      if (accountOpen && accountRef.current && !accountRef.current.contains(e.target as Node)) {
+        setAccountOpen(false)
+      }
+      if (notifOpen && notifRef.current && !notifRef.current.contains(e.target as Node)) {
+        setNotifOpen(false)
+      }
+    }
+    document.addEventListener('mousedown', handleClick)
+    return () => document.removeEventListener('mousedown', handleClick)
+  }, [accountOpen, notifOpen])
 
-  async function triggerNewBrief() {
-    setBriefRunning(true); setBriefMsg(null)
-    try {
-      const res = await apiFetch('/api/run-digest', { method: 'POST' })
-      const data = await res.json()
-      if (!res.ok) throw new Error(data.message ?? `HTTP ${res.status}`)
-      setBriefMsg('Brief started — ready in ~5 min')
-    } catch {
-      setBriefMsg('Failed to start')
-    } finally {
-      setBriefRunning(false)
+  function openNotifications() {
+    const opening = !notifOpen
+    setNotifOpen(opening)
+    if (opening && notifCount > 0) {
+      apiFetch('/api/notifications/seen', { method: 'POST' }).catch(() => {})
+      setNotifCount(0)
     }
   }
+
+  const email = user?.getFirstProviderUserId() ?? ''
+  const displayName = (user as any)?.displayName ?? null
+  const initials = displayName
+    ? displayName.split(' ').map((w: string) => w[0]).join('').slice(0, 2).toUpperCase()
+    : email.slice(0, 2).toUpperCase()
+  const plan = (user as any)?.plan ?? 'free'
+  const planLabel = plan === 'pro' ? 'Pro' : plan === 'team' ? 'Team' : 'Free'
+
+  const sidebarWidth = collapsed ? '64px' : '220px'
 
   return (
     <div style={{ display: 'flex', minHeight: '100vh', backgroundColor: 'var(--surface)' }}>
@@ -86,19 +126,30 @@ export function AppLayout({ children }: { children: React.ReactNode }) {
             overflowX: 'hidden',
           }}
         >
-          {/* Logo */}
-          <div style={{ padding: collapsed && !mobileOpen ? '20px 0' : '20px 16px', textAlign: collapsed && !mobileOpen ? 'center' : 'left' }}>
+          {/* Logo wordmark */}
+          <div style={{
+            padding: collapsed && !mobileOpen ? '22px 0' : '22px 16px',
+            textAlign: collapsed && !mobileOpen ? 'center' : 'left',
+          }}>
             {!collapsed || mobileOpen ? (
               <>
-                <p style={{ fontFamily: 'var(--font-sans)', fontSize: '18px', fontWeight: 700, color: 'var(--on-surface)', lineHeight: 1 }}>
+                <p style={{
+                  fontFamily: 'var(--font-sans)', fontSize: '13px', fontWeight: 700,
+                  letterSpacing: '0.12em', textTransform: 'uppercase',
+                  color: 'var(--secondary-container)', lineHeight: 1, margin: 0,
+                }}>
                   BenchWatch
                 </p>
-                <p className="label-sm" style={{ color: 'var(--secondary-container)', marginTop: '4px' }}>
+                <p style={{
+                  fontFamily: 'var(--font-sans)', fontSize: '10px', fontWeight: 400,
+                  letterSpacing: '0.08em', textTransform: 'uppercase',
+                  color: 'var(--on-surface-variant)', marginTop: '5px', marginBottom: 0,
+                }}>
                   Legal Intelligence
                 </p>
               </>
             ) : (
-              <Scale size={20} color="var(--secondary-container)" />
+              <Scale size={18} color="var(--secondary-container)" />
             )}
           </div>
 
@@ -115,72 +166,24 @@ export function AppLayout({ children }: { children: React.ReactNode }) {
             ))}
           </nav>
 
-          {/* Bottom */}
-          <div style={{ padding: collapsed && !mobileOpen ? '16px 8px' : '16px' }}>
-            {/* New Brief button */}
-            {(!collapsed || mobileOpen) ? (
-              <div style={{ marginBottom: '8px' }}>
-                <button
-                  onClick={triggerNewBrief}
-                  disabled={briefRunning}
-                  aria-label="Run a new briefing"
-                  style={{
-                    display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '6px',
-                    width: '100%', padding: '10px 16px',
-                    background: 'linear-gradient(135deg, var(--primary) 0%, var(--primary-container) 100%)',
-                    color: '#ffffff', borderRadius: 'var(--rounded-md)', border: 'none',
-                    fontFamily: 'var(--font-sans)', fontSize: '14px', fontWeight: 600,
-                    cursor: briefRunning ? 'wait' : 'pointer',
-                    opacity: briefRunning ? 0.75 : 1,
-                  }}
-                >
-                  {briefRunning
-                    ? <><Loader2 size={13} style={{ animation: 'bw-spin 1s linear infinite' }} /> Starting…</>
-                    : '+ New Briefing'}
-                </button>
-                {briefMsg && (
-                  <p className="label-sm" style={{ color: 'var(--on-surface-variant)', marginTop: '6px', textAlign: 'center' }}>
-                    {briefMsg}
-                  </p>
-                )}
-              </div>
-            ) : (
-              <button
-                onClick={triggerNewBrief}
-                disabled={briefRunning}
-                title="New Briefing"
-                aria-label="Run a new briefing"
-                style={{
-                  width: '100%', display: 'flex', alignItems: 'center', justifyContent: 'center',
-                  padding: '8px 0', marginBottom: '8px', border: 'none', borderRadius: 'var(--rounded-md)',
-                  background: 'linear-gradient(135deg, var(--primary) 0%, var(--primary-container) 100%)',
-                  cursor: briefRunning ? 'wait' : 'pointer',
-                }}
-              >
-                {briefRunning
-                  ? <Loader2 size={14} color="#ffffff" style={{ animation: 'bw-spin 1s linear infinite' }} />
-                  : <span style={{ color: '#ffffff', fontFamily: 'var(--font-sans)', fontSize: '16px', fontWeight: 700, lineHeight: 1 }}>+</span>}
-              </button>
-            )}
-
-            {/* Collapse toggle (desktop only) */}
-            {isDesktop && (
+          {/* Bottom — collapse chevron only */}
+          {isDesktop && (
+            <div style={{ padding: collapsed ? '16px 0' : '16px', display: 'flex', justifyContent: collapsed ? 'center' : 'flex-end' }}>
               <button
                 onClick={() => setCollapsed((c) => !c)}
                 aria-label={collapsed ? 'Expand sidebar' : 'Collapse sidebar'}
                 style={{
-                  width: '100%', display: 'flex', alignItems: 'center',
-                  justifyContent: collapsed ? 'center' : 'flex-start',
-                  gap: '8px', padding: '8px', background: 'none', border: 'none',
-                  cursor: 'pointer', color: 'var(--on-surface-variant)',
+                  background: 'none', border: 'none', cursor: 'pointer',
+                  color: 'var(--on-surface-variant)', padding: '4px',
+                  display: 'flex', alignItems: 'center', justifyContent: 'center',
                   borderRadius: 'var(--rounded-md)',
+                  opacity: 0.5,
                 }}
               >
-                <HelpCircle size={15} />
-                {!collapsed && <span className="label-lg" style={{ color: 'var(--on-surface-variant)' }}>Help</span>}
+                {collapsed ? <ChevronRight size={16} /> : <ChevronLeft size={16} />}
               </button>
-            )}
-          </div>
+            </div>
+          )}
         </aside>
       )}
 
@@ -188,7 +191,6 @@ export function AppLayout({ children }: { children: React.ReactNode }) {
       <div
         style={{
           flex: 1,
-          // On desktop: push right of sidebar. On mobile: no margin (sidebar overlays).
           marginLeft: isDesktop ? sidebarWidth : '0px',
           display: 'flex', flexDirection: 'column', minHeight: '100vh',
           transition: 'margin-left 200ms ease',
@@ -220,7 +222,7 @@ export function AppLayout({ children }: { children: React.ReactNode }) {
             {NAV_ITEMS.find((n) => location.pathname.startsWith(n.href))?.label ?? 'BenchWatch'}
           </span>
 
-          {/* Search — navigates to /intelligence?q=... on Enter */}
+          {/* Search */}
           <div style={{ flex: 1, maxWidth: '400px', position: 'relative' }}>
             <Search size={14} style={{ position: 'absolute', left: '10px', top: '50%', transform: 'translateY(-50%)', color: 'var(--on-surface-variant)', pointerEvents: 'none' }} />
             <input
@@ -250,23 +252,171 @@ export function AppLayout({ children }: { children: React.ReactNode }) {
 
           {/* Right icons */}
           <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
-            <TopBarIcon aria-label="Notifications"><Bell size={16} /></TopBarIcon>
-            <Link to="/settings" aria-label="Settings" style={{ textDecoration: 'none' }}>
-              <TopBarIcon aria-label="Settings"><Settings size={16} /></TopBarIcon>
-            </Link>
-            <div
-              role="button"
-              tabIndex={0}
-              aria-label="Account menu"
-              style={{
-                width: '32px', height: '32px', borderRadius: '50%',
-                backgroundColor: 'var(--primary-container)', color: '#ffffff',
-                display: 'flex', alignItems: 'center', justifyContent: 'center',
-                fontFamily: 'var(--font-sans)', fontSize: '12px', fontWeight: 600,
-                flexShrink: 0, cursor: 'pointer',
-              }}
-            >
-              {initials}
+            {/* Notifications */}
+            <div ref={notifRef} style={{ position: 'relative' }}>
+              <button
+                aria-label="Notifications"
+                onClick={openNotifications}
+                style={{
+                  width: '32px', height: '32px', position: 'relative',
+                  display: 'flex', alignItems: 'center', justifyContent: 'center',
+                  background: 'none', border: 'none', cursor: 'pointer',
+                  color: notifOpen ? 'var(--on-surface)' : 'var(--on-surface-variant)',
+                  borderRadius: 'var(--rounded-md)',
+                }}
+              >
+                <Bell size={16} />
+                {notifCount > 0 && (
+                  <span style={{
+                    position: 'absolute', top: '4px', right: '4px',
+                    width: '8px', height: '8px', borderRadius: '50%',
+                    backgroundColor: 'var(--secondary-container)',
+                    border: '1.5px solid var(--surface-container-lowest)',
+                  }} />
+                )}
+              </button>
+
+              {/* Notifications dropdown */}
+              {notifOpen && (
+                <div style={{
+                  position: 'absolute', top: 'calc(100% + 8px)', right: 0,
+                  width: '320px', maxHeight: '400px', overflowY: 'auto',
+                  backgroundColor: 'var(--surface-container-lowest)',
+                  border: '1px solid var(--surface-dim)',
+                  borderRadius: 'var(--rounded-lg)',
+                  boxShadow: '0 4px 24px rgba(0,0,0,0.12)',
+                  zIndex: 100,
+                }}>
+                  <div style={{ padding: '14px 16px', borderBottom: '1px solid var(--surface-dim)' }}>
+                    <p className="label-md" style={{ color: 'var(--on-surface-variant)', margin: 0 }}>New Decisions</p>
+                  </div>
+
+                  {notifItems.length === 0 ? (
+                    <div style={{ padding: '24px 16px', textAlign: 'center' }}>
+                      <p style={{ fontFamily: 'var(--font-sans)', fontSize: '13px', color: 'var(--on-surface-variant)', margin: 0 }}>
+                        No new significant decisions since your last visit
+                      </p>
+                    </div>
+                  ) : (
+                    <>
+                      {notifItems.map((item, i) => (
+                        <Link
+                          key={item.id}
+                          to="/archive"
+                          onClick={() => setNotifOpen(false)}
+                          style={{
+                            display: 'block', padding: '12px 16px', textDecoration: 'none',
+                            borderBottom: i < notifItems.length - 1 ? '1px solid var(--surface-container-low)' : 'none',
+                            backgroundColor: 'transparent',
+                          }}
+                        >
+                          <div style={{ display: 'flex', alignItems: 'center', gap: '8px', marginBottom: '4px' }}>
+                            <SignifBadge score={item.significanceScore} />
+                            <span style={{ fontFamily: 'var(--font-mono)', fontSize: '11px', color: 'var(--on-surface-variant)' }}>
+                              {item.case.courtCode}
+                            </span>
+                          </div>
+                          <p style={{
+                            margin: 0, fontFamily: 'var(--font-sans)', fontSize: '13px', fontWeight: 600,
+                            color: 'var(--on-surface)',
+                            overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap',
+                          }}>
+                            {item.case.caseName}
+                          </p>
+                          <p style={{ margin: '2px 0 0', fontFamily: 'var(--font-mono)', fontSize: '11px', color: 'var(--on-surface-variant)' }}>
+                            {item.case.citation}
+                          </p>
+                        </Link>
+                      ))}
+                      <Link
+                        to="/archive"
+                        onClick={() => setNotifOpen(false)}
+                        style={{
+                          display: 'block', padding: '10px 16px', textDecoration: 'none',
+                          borderTop: '1px solid var(--surface-dim)',
+                          fontFamily: 'var(--font-sans)', fontSize: '12px', fontWeight: 600,
+                          color: 'var(--secondary-container)', textAlign: 'center',
+                        }}
+                      >
+                        View all in Archive →
+                      </Link>
+                    </>
+                  )}
+                </div>
+              )}
+            </div>
+
+            {/* Account avatar + dropdown */}
+            <div ref={accountRef} style={{ position: 'relative' }}>
+              <button
+                aria-label="Account menu"
+                onClick={() => setAccountOpen((o) => !o)}
+                style={{
+                  width: '32px', height: '32px', borderRadius: '50%',
+                  backgroundColor: 'var(--primary-container)', color: '#ffffff',
+                  display: 'flex', alignItems: 'center', justifyContent: 'center',
+                  fontFamily: 'var(--font-sans)', fontSize: '12px', fontWeight: 600,
+                  flexShrink: 0, cursor: 'pointer', border: 'none',
+                }}
+              >
+                {initials}
+              </button>
+
+              {/* Account dropdown */}
+              {accountOpen && (
+                <div style={{
+                  position: 'absolute', top: 'calc(100% + 8px)', right: 0,
+                  width: '200px',
+                  backgroundColor: 'var(--surface-container-lowest)',
+                  border: '1px solid var(--surface-dim)',
+                  borderRadius: 'var(--rounded-lg)',
+                  boxShadow: '0 4px 24px rgba(0,0,0,0.12)',
+                  zIndex: 100, overflow: 'hidden',
+                }}>
+                  {/* User info */}
+                  <div style={{ padding: '12px 14px', borderBottom: '1px solid var(--surface-dim)' }}>
+                    {displayName && (
+                      <p style={{ margin: '0 0 2px', fontFamily: 'var(--font-sans)', fontSize: '13px', fontWeight: 600, color: 'var(--on-surface)' }}>
+                        {displayName}
+                      </p>
+                    )}
+                    <p style={{ margin: 0, fontFamily: 'var(--font-sans)', fontSize: '12px', color: 'var(--on-surface-variant)', overflow: 'hidden', textOverflow: 'ellipsis' }}>
+                      {email}
+                    </p>
+                    <span className="label-sm" style={{ color: 'var(--secondary-container)', marginTop: '4px', display: 'inline-block' }}>
+                      {planLabel} Plan
+                    </span>
+                  </div>
+
+                  {/* Actions */}
+                  <Link
+                    to="/settings"
+                    onClick={() => setAccountOpen(false)}
+                    style={{
+                      display: 'flex', alignItems: 'center', gap: '8px',
+                      padding: '10px 14px', textDecoration: 'none',
+                      fontFamily: 'var(--font-sans)', fontSize: '13px', fontWeight: 500,
+                      color: 'var(--on-surface)',
+                    }}
+                  >
+                    <Settings size={14} color="var(--on-surface-variant)" />
+                    Account Settings
+                  </Link>
+                  <button
+                    onClick={() => { setAccountOpen(false); logout() }}
+                    style={{
+                      display: 'flex', alignItems: 'center', gap: '8px', width: '100%',
+                      padding: '10px 14px', background: 'none', border: 'none', cursor: 'pointer',
+                      borderTop: '1px solid var(--surface-dim)',
+                      fontFamily: 'var(--font-sans)', fontSize: '13px', fontWeight: 500,
+                      color: 'var(--on-surface)', textAlign: 'left',
+                    }}
+                  >
+                    <LogOut size={14} color="var(--on-surface-variant)" />
+                    Sign out
+                  </button>
+                </div>
+              )}
             </div>
           </div>
         </header>
@@ -335,18 +485,17 @@ function NavLink({
   )
 }
 
-function TopBarIcon({ children, 'aria-label': ariaLabel }: { children: React.ReactNode; 'aria-label'?: string }) {
+function SignifBadge({ score }: { score: number }) {
+  const label = score >= 9 ? 'PRECEDENT' : score >= 7 ? 'SIGNIFICANT' : 'NOTABLE'
+  const bg = score >= 9 ? 'var(--error)' : score >= 7 ? 'var(--warning)' : 'var(--secondary-container)'
   return (
-    <button
-      aria-label={ariaLabel}
-      style={{
-        width: '32px', height: '32px',
-        display: 'flex', alignItems: 'center', justifyContent: 'center',
-        background: 'none', border: 'none', cursor: 'pointer',
-        color: 'var(--on-surface-variant)', borderRadius: 'var(--rounded-md)',
-      }}
-    >
-      {children}
-    </button>
+    <span style={{
+      fontFamily: 'var(--font-sans)', fontSize: '10px', fontWeight: 600,
+      letterSpacing: '0.04em', textTransform: 'uppercase',
+      backgroundColor: bg, color: '#fff',
+      padding: '2px 6px', borderRadius: 'var(--rounded-sm)',
+    }}>
+      {label}
+    </span>
   )
 }

@@ -150,6 +150,115 @@ Provide a structured analysis suitable for senior legal practitioners. Return JS
 }`
 }
 
+// ── Legislation prompts ───────────────────────────────────────────────────────
+
+export type LegislationTriageItem = {
+  id: string
+  title: string
+  jurisdiction: string
+  changeType: string
+  feedSummary: string | null
+}
+
+export type LegislationTriageResult = {
+  id: string
+  areaSlugs: string[]          // up to 3 matching practice areas
+  significanceScore: number    // 1-10
+  changeSummary: string        // 2-3 sentences: what changed
+  practiceImpact: string | null // 1 sentence: why it matters (score 5+ only)
+}
+
+export function buildLegislationTriagePrompt(items: LegislationTriageItem[]): string {
+  const AREA_SLUGS = 'administrative, constitutional, contract, employment, criminal, corporations, property, planning, tax, tort, ip, competition, migration, privacy, family'
+
+  const itemList = items
+    .map(
+      (item) =>
+        `ID: ${item.id}\nTitle: ${item.title}\nJurisdiction: ${item.jurisdiction.toUpperCase()}\nType: ${item.changeType}\nDescription: ${item.feedSummary ?? 'none provided'}`
+    )
+    .join('\n\n---\n\n')
+
+  return `You are an expert Australian legal analyst. Classify and summarise the following ${items.length} recent legislative changes.
+
+For each item return:
+1. areaSlugs — up to 3 practice area slugs from this list ONLY: ${AREA_SLUGS}
+   Return empty array [] if the change is purely administrative with no legal practice impact.
+2. significanceScore — integer 1-10:
+   - 9-10: Major Act overhaul or new Act that reshapes a core legal doctrine
+   - 7-8: Significant amendment clarifying unsettled law or introducing new obligations
+   - 5-6: Notable commencement of existing provisions, or minor amendment with practical effect
+   - 3-4: Routine subordinate legislation (fees, forms, minor technical)
+   - 1-2: Administrative/technical (name changes, omissions, typo corrections)
+3. changeSummary — 2-3 sentences in plain English: what changed and its legal effect. Be specific about the Act name and jurisdiction.
+4. practiceImpact — 1 sentence on why this matters to practitioners. Omit (null) for score 1-4.
+
+Return a JSON array ONLY — no markdown, no explanation, no code fences:
+[
+  {
+    "id": "<exact id from input>",
+    "areaSlugs": ["contract", "corporations"],
+    "significanceScore": 6,
+    "changeSummary": "...",
+    "practiceImpact": "..."
+  }
+]
+
+Legislation changes:
+
+${itemList}`
+}
+
+export type LegislationDeepAnalysisItem = {
+  id: string
+  title: string
+  jurisdiction: string
+  fullText: string
+  existingSummary: string
+}
+
+export type LegislationDeepAnalysisResult = {
+  id: string
+  changeSummary: string
+  practiceImpact: string
+  significanceScore: number
+}
+
+export function buildLegislationDeepAnalysisPrompt(items: LegislationDeepAnalysisItem[]): string {
+  const blocks = items
+    .map(
+      (item) =>
+        `ID: ${item.id}
+Title: ${item.title}
+Jurisdiction: ${item.jurisdiction.toUpperCase()}
+Initial summary: ${item.existingSummary}
+
+Full text excerpt:
+${item.fullText.slice(0, 3000)}${item.fullText.length > 3000 ? '\n[truncated]' : ''}`
+    )
+    .join('\n\n===\n\n')
+
+  return `You are an expert Australian legal analyst. The following legislative changes were scored 7+ (highly significant). You now have their full text. Produce refined summaries.
+
+For each, return:
+1. changeSummary — 3-4 sentences: what changed, key provisions, legal effect. Be precise about section numbers and operative dates where visible.
+2. practiceImpact — 2 sentences: concrete implications for practitioners (drafting, compliance, litigation strategy).
+3. significanceScore — integer 7-10, refined based on full text (may adjust slightly from initial score).
+
+Return a JSON array ONLY — no markdown, no explanation, no code fences:
+[
+  {
+    "id": "<exact id from input>",
+    "changeSummary": "...",
+    "practiceImpact": "...",
+    "significanceScore": 8
+  }
+]
+
+Items:
+
+${blocks}`
+}
+
 export type DigestCase = {
   citation: string
   caseName: string

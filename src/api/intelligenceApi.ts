@@ -72,6 +72,7 @@ export const browseCasesHandler = async (req: any, res: any, context: any) => {
           primaryArea: true,
           whyItMatters: true,
           factsSummary: true,
+          legalAnalysis: true,
           scoreJustification: true,
         },
       },

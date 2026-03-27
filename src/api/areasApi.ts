@@ -1,5 +1,16 @@
 import { HttpError } from 'wasp/server'
 
+export const updateUserProfileHandler = async (req: any, res: any, context: any) => {
+  if (!context.user) throw new HttpError(401)
+  const { displayName } = req.body as { displayName?: string }
+  const trimmed = displayName?.trim() ?? null
+  await context.entities.User.update({
+    where: { id: context.user.id },
+    data: { displayName: trimmed },
+  })
+  res.json({ displayName: trimmed })
+}
+
 export const getAreasHandler = async (_req: any, res: any, context: any) => {
   const areas = await context.entities.LawArea.findMany({
     where: { isActive: true },
@@ -44,10 +55,11 @@ export const updateUserAreasHandler = async (req: any, res: any, context: any) =
     })),
   })
 
-  // Mark user as onboarded
+  // Mark user as onboarded and auto-assign Pro plan
+  // TODO: Remove auto-Pro before launch — integrate Stripe for real plan management
   await context.entities.User.update({
     where: { id: context.user.id },
-    data: { onboarded: true },
+    data: { onboarded: true, plan: 'pro' },
   })
 
   res.json({ updated: areaSlugs.length, areaSlugs })

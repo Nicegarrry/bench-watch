@@ -1,5 +1,6 @@
 import { prisma } from 'wasp/server'
 import { JADE_FEEDS } from './feedRegistry'
+import { LEGISLATION_FEEDS } from './legislationFeedRegistry'
 
 const LAW_AREAS = [
   { slug: 'administrative',      name: 'Administrative Law',          icon: '⚖️',  sortOrder: 1 },
@@ -54,4 +55,35 @@ export async function seedAll(): Promise<void> {
     })
   }
   console.log(`Seeded ${JADE_FEEDS.length} RSS feeds.`)
+
+  console.log('Seeding legislation feed registry...')
+  for (const feed of LEGISLATION_FEEDS) {
+    // Use feedUrl as natural key since jurisdiction alone isn't unique (could have multiple feeds)
+    const existing = await prisma.legislationFeedRegistry.findFirst({
+      where: { feedUrl: feed.feedUrl },
+    })
+    if (existing) {
+      await prisma.legislationFeedRegistry.update({
+        where: { id: existing.id },
+        data: {
+          jurisdictionName: feed.jurisdictionName,
+          feedType: feed.feedType,
+          tier: feed.tier,
+          isActive: true,
+        },
+      })
+    } else {
+      await prisma.legislationFeedRegistry.create({
+        data: {
+          jurisdiction: feed.jurisdiction,
+          jurisdictionName: feed.jurisdictionName,
+          feedUrl: feed.feedUrl,
+          feedType: feed.feedType,
+          tier: feed.tier,
+          isActive: true,
+        },
+      })
+    }
+  }
+  console.log(`Seeded ${LEGISLATION_FEEDS.length} legislation feeds.`)
 }

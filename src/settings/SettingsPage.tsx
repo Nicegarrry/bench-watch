@@ -2,11 +2,8 @@ import { useAuth } from 'wasp/client/auth'
 import { apiFetch } from '../shared/apiFetch'
 import { Link } from 'react-router'
 import { BriefHeader } from '../shared/components/BriefHeader'
-import { AreaTag, AREA_LABELS } from '../shared/components/AreaTag'
 import { useEffect, useState } from 'react'
 import { Check } from 'lucide-react'
-
-type UserArea = { areaSlug: string }
 
 export function SettingsPage() {
   const { data: user } = useAuth()
@@ -15,11 +12,19 @@ export function SettingsPage() {
   const [savingAreas, setSavingAreas] = useState(false)
   const [areasSaved, setAreasSaved] = useState(false)
 
+  // Display name editing
+  const [displayName, setDisplayName] = useState<string>((user as any)?.displayName ?? '')
+  const [savingName, setSavingName] = useState(false)
+  const [nameSaved, setNameSaved] = useState(false)
+
   useEffect(() => {
     apiFetch('/api/areas').then((r) => r.json()).then(setAllAreas)
-    // User areas come from the User object via auth context — not directly available
-    // We derive them by reading the API
   }, [])
+
+  // Sync display name from user when auth loads
+  useEffect(() => {
+    if ((user as any)?.displayName) setDisplayName((user as any).displayName)
+  }, [user])
 
   async function saveAreas(slugs: string[]) {
     setSavingAreas(true)
@@ -40,8 +45,25 @@ export function SettingsPage() {
     if (next.length > 0) saveAreas(next)
   }
 
+  async function saveName() {
+    if (!displayName.trim()) return
+    setSavingName(true)
+    try {
+      await apiFetch('/api/user/profile', { method: 'POST', body: JSON.stringify({ displayName: displayName.trim() }) })
+      setNameSaved(true)
+      setTimeout(() => setNameSaved(false), 2000)
+    } finally {
+      setSavingName(false)
+    }
+  }
+
   const email = user?.getFirstProviderUserId() ?? ''
-  const initials = email.slice(0, 2).toUpperCase()
+  const currentDisplayName = (user as any)?.displayName ?? displayName
+  const initials = currentDisplayName
+    ? currentDisplayName.split(' ').map((w: string) => w[0]).join('').slice(0, 2).toUpperCase()
+    : email.slice(0, 2).toUpperCase()
+  const plan = (user as any)?.plan ?? 'free'
+  const planLabel = plan === 'pro' ? 'Pro' : plan === 'team' ? 'Team' : 'Free'
 
   return (
     <div>
@@ -50,8 +72,9 @@ export function SettingsPage() {
       </div>
 
       {/* Profile */}
-      <Card title="Profile Identity">
-        <div style={{ display: 'flex', alignItems: 'center', gap: '20px' }}>
+      <Card title="Profile">
+        <div style={{ display: 'grid', gridTemplateColumns: 'auto 1fr', gap: '20px', alignItems: 'start' }}>
+          {/* Avatar */}
           <div
             style={{
               width: '56px', height: '56px', borderRadius: '50%',
@@ -63,19 +86,64 @@ export function SettingsPage() {
           >
             {initials}
           </div>
-          <div>
-            <p className="title-sm" style={{ color: 'var(--on-surface)', margin: '0 0 4px' }}>{email}</p>
+
+          {/* Details */}
+          <div style={{ display: 'flex', flexDirection: 'column', gap: '12px' }}>
+            <div>
+              <p style={{ margin: '0 0 2px', fontFamily: 'var(--font-sans)', fontSize: '12px', fontWeight: 600, letterSpacing: '0.05rem', textTransform: 'uppercase', color: 'var(--on-surface-variant)' }}>
+                Email
+              </p>
+              <p style={{ margin: 0, fontFamily: 'var(--font-sans)', fontSize: '14px', color: 'var(--on-surface)' }}>{email}</p>
+            </div>
+
+            <div>
+              <p style={{ margin: '0 0 6px', fontFamily: 'var(--font-sans)', fontSize: '12px', fontWeight: 600, letterSpacing: '0.05rem', textTransform: 'uppercase', color: 'var(--on-surface-variant)' }}>
+                Display name
+              </p>
+              <div style={{ display: 'flex', gap: '8px', alignItems: 'center', maxWidth: '320px' }}>
+                <input
+                  type="text"
+                  value={displayName}
+                  onChange={(e) => setDisplayName(e.target.value)}
+                  onKeyDown={(e) => e.key === 'Enter' && saveName()}
+                  placeholder="e.g. Sarah Chen"
+                  style={{
+                    flex: 1, padding: '7px 10px',
+                    backgroundColor: 'var(--surface-container-low)',
+                    border: '1px solid var(--surface-dim)',
+                    borderRadius: 'var(--rounded-md)',
+                    fontFamily: 'var(--font-sans)', fontSize: '14px',
+                    color: 'var(--on-surface)', outline: 'none',
+                  }}
+                />
+                <button
+                  onClick={saveName}
+                  disabled={savingName || !displayName.trim()}
+                  style={{
+                    padding: '7px 14px', borderRadius: 'var(--rounded-md)',
+                    border: 'none', cursor: savingName || !displayName.trim() ? 'default' : 'pointer',
+                    backgroundColor: nameSaved ? 'var(--color-success)' : 'var(--primary-container)',
+                    color: '#fff', fontFamily: 'var(--font-sans)', fontSize: '13px', fontWeight: 600,
+                    opacity: !displayName.trim() ? 0.5 : 1, transition: 'background-color 200ms',
+                    display: 'flex', alignItems: 'center', gap: '4px',
+                  }}
+                >
+                  {nameSaved ? <><Check size={12} /> Saved</> : 'Save'}
+                </button>
+              </div>
+            </div>
+
             <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
-              <span className="label-sm" style={{ color: 'var(--on-surface-variant)', textTransform: 'capitalize' }}>
-                Free Plan
+              <span className="label-sm" style={{
+                backgroundColor: 'var(--primary-container)', color: '#fff',
+                padding: '2px 10px', borderRadius: 'var(--rounded-md)',
+              }}>
+                {planLabel} Plan
               </span>
-              <span
-                className="label-sm"
-                style={{
-                  backgroundColor: '#dcfce7', color: '#166534',
-                  padding: '1px 8px', borderRadius: 'var(--rounded-md)',
-                }}
-              >
+              <span className="label-sm" style={{
+                backgroundColor: 'var(--color-success-bg)', color: 'var(--color-success-text)',
+                padding: '2px 8px', borderRadius: 'var(--rounded-md)',
+              }}>
                 VERIFIED
               </span>
             </div>
@@ -87,7 +155,7 @@ export function SettingsPage() {
       <Card
         title="Practice Areas"
         action={areasSaved ? (
-          <span className="label-sm" style={{ color: '#166534', display: 'flex', alignItems: 'center', gap: '4px' }}>
+          <span className="label-sm" style={{ color: 'var(--color-success)', display: 'flex', alignItems: 'center', gap: '4px' }}>
             <Check size={12} /> Saved
           </span>
         ) : undefined}
@@ -125,9 +193,9 @@ export function SettingsPage() {
         }}
       >
         <p className="label-md" style={{ color: 'rgba(255,255,255,0.6)', marginBottom: '8px' }}>Current Plan</p>
-        <h2 className="headline-md" style={{ color: '#fff', margin: '0 0 4px' }}>Free</h2>
-        <p className="body-md" style={{ color: 'rgba(255,255,255,0.7)', margin: '0 0 24px' }}>
-          3 runs/week · 1 practice area
+        <h2 className="headline-md" style={{ color: '#fff', margin: '0 0 4px' }}>{planLabel}</h2>
+        <p style={{ fontFamily: 'var(--font-sans)', fontSize: '14px', color: 'rgba(255,255,255,0.7)', margin: '0 0 24px' }}>
+          {plan === 'free' ? '3 runs/week · 1 practice area' : plan === 'pro' ? '10 runs/week · unlimited areas + archive' : 'Unlimited · team features'}
         </p>
         <button
           style={{
@@ -137,7 +205,7 @@ export function SettingsPage() {
             marginRight: '16px',
           }}
         >
-          Upgrade to Pro →
+          {plan === 'free' ? 'Upgrade to Pro →' : 'Manage Plan →'}
         </button>
         <button
           style={{
@@ -157,16 +225,21 @@ export function SettingsPage() {
           <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
             <div>
               <p className="label-lg" style={{ color: 'var(--on-surface)', margin: '0 0 2px' }}>Password</p>
-              <p className="body-md" style={{ color: 'var(--on-surface-variant)', margin: 0, fontSize: '13px' }}>Last changed: unknown</p>
+              <p style={{ fontFamily: 'var(--font-sans)', fontSize: '13px', color: 'var(--on-surface-variant)', margin: 0 }}>
+                Reset via email link
+              </p>
             </div>
             <Link to="/request-password-reset" className="label-lg" style={{ color: 'var(--secondary-container)', textDecoration: 'none' }}>
               Reset →
             </Link>
           </div>
+          <div style={{ height: '1px', backgroundColor: 'var(--surface-dim)' }} />
           <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
             <div>
               <p className="label-lg" style={{ color: 'var(--on-surface)', margin: '0 0 2px' }}>Active Sessions</p>
-              <p className="body-md" style={{ color: 'var(--on-surface-variant)', margin: 0, fontSize: '13px' }}>Manage active login sessions</p>
+              <p style={{ fontFamily: 'var(--font-sans)', fontSize: '13px', color: 'var(--on-surface-variant)', margin: 0 }}>
+                Manage active login sessions
+              </p>
             </div>
             <button className="label-lg" style={{ background: 'none', border: 'none', cursor: 'pointer', color: 'var(--secondary-container)' }}>
               Review →
@@ -178,13 +251,14 @@ export function SettingsPage() {
       {/* Danger zone */}
       <div
         style={{
-          backgroundColor: '#fef2f2', borderRadius: 'var(--rounded-lg)',
+          backgroundColor: 'var(--color-error-bg)', borderRadius: 'var(--rounded-lg)',
           padding: '24px 28px', marginBottom: '24px',
+          border: '1px solid rgba(184,50,48,0.12)',
         }}
       >
-        <p className="label-lg" style={{ color: 'var(--error)', margin: '0 0 4px' }}>Archive Account</p>
-        <p className="body-md" style={{ color: 'var(--on-surface-variant)', margin: '0 0 16px', fontSize: '13px' }}>
-          This will archive your data and deactivate your account.
+        <p className="label-lg" style={{ color: 'var(--error)', margin: '0 0 4px' }}>Deactivate Account</p>
+        <p style={{ fontFamily: 'var(--font-sans)', fontSize: '13px', color: 'var(--on-surface-variant)', margin: '0 0 16px' }}>
+          This will deactivate your account and archive your data.
         </p>
         <button
           style={{
@@ -194,7 +268,7 @@ export function SettingsPage() {
             color: 'var(--error)', cursor: 'pointer',
           }}
         >
-          Archive Data
+          Deactivate Account
         </button>
       </div>
     </div>

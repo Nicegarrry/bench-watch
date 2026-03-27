@@ -63,7 +63,7 @@ export async function buildAndSaveDigest(userId: string, areaSlugs: string[]): P
   try {
     const matchingCases = await prisma.case.findMany({
       where: {
-        createdAt: { gte: periodStart },
+        decisionDate: { gte: periodStart },
         // Minimum confidence 0.3 filters out noise (score < 3) while keeping all meaningful tags
         caseAreaTags: { some: { areaSlug: { in: areaSlugs }, relevanceConfidence: { gte: 0.3 } } },
         caseAnalysis: { isNot: null },

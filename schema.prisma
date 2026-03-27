@@ -10,10 +10,12 @@ generator client {
 model User {
   id                      String    @id @default(uuid())
   username                String
+  displayName             String?
   plan                    String    @default("free")
   onboarded               Boolean   @default(false)
   dashboardRunsThisWeek   Int       @default(0)
   dashboardRunsResetAt    DateTime?
+  lastNotifSeenAt         DateTime?
   createdAt               DateTime  @default(now())
 
   userAreas  UserArea[]
@@ -48,8 +50,9 @@ model LawArea {
   sortOrder        Int      @default(0)
   isActive         Boolean  @default(true)
 
-  userAreas    UserArea[]
-  caseAreaTags CaseAreaTag[]
+  userAreas         UserArea[]
+  caseAreaTags      CaseAreaTag[]
+  legislationAreaTags LegislationAreaTag[]
 
   @@map("law_areas")
 }
@@ -208,4 +211,74 @@ model EmailSend {
   digest UserDigest? @relation(fields: [digestId], references: [id])
 
   @@map("email_sends")
+}
+
+// ── Legislation Pipeline ──────────────────────────────────────────────────────
+
+model LegislationFeedRegistry {
+  id               String    @id @default(cuid())
+  jurisdiction     String    // "cth", "nsw", "vic", "qld", "wa", "sa", "tas", "act", "nt"
+  jurisdictionName String
+  feedUrl          String
+  feedType         String    // "atom", "rss", "html-scrape"
+  tier             Int       @default(1) // 1=direct jurisdiction site, 2=austlii/fallback
+  isActive         Boolean   @default(true)
+  lastPolledAt     DateTime?
+  lastSuccessfulAt DateTime?
+  lastError        String?
+  lastHttpStatus   Int?
+  itemsLastPoll    Int       @default(0)
+  createdAt        DateTime  @default(now())
+
+  @@map("legislation_feed_registry")
+}
+
+model LegislationChange {
+  id             String    @id @default(cuid())
+  externalId     String    @unique // URL or guid from feed item
+  title          String
+  jurisdiction   String    // "cth", "nsw", etc.
+  changeType     String    @default("unknown") // "act_new", "act_amended", "act_commenced", "regulation_made", "bill_introduced"
+  legislationUrl String?   // Source URL on jurisdiction site
+  austliiUrl     String?   // AustLII URL if known
+  publishedAt    DateTime
+  feedSummary    String?   // Raw description from feed
+  fullText       String?   // Fetched full text (truncated to 100KB)
+  textFetched    Boolean   @default(false)
+  source         String    // Feed URL that produced this record
+  createdAt      DateTime  @default(now())
+  updatedAt      DateTime  @updatedAt
+
+  areaTags LegislationAreaTag[]
+  analysis LegislationChangeAnalysis?
+
+  @@map("legislation_changes")
+}
+
+model LegislationAreaTag {
+  changeId            String
+  areaSlug            String
+  relevanceConfidence Float  @default(0.5)
+  assignedBy          String @default("ai")
+
+  change  LegislationChange @relation(fields: [changeId], references: [id])
+  lawArea LawArea           @relation(fields: [areaSlug], references: [slug])
+
+  @@id([changeId, areaSlug])
+  @@map("legislation_area_tags")
+}
+
+model LegislationChangeAnalysis {
+  id                String   @id @default(cuid())
+  changeId          String   @unique
+  changeSummary     String   // Plain-English: what changed
+  practiceImpact    String   // Why it matters to practitioners
+  affectedAreas     String[] // Primary area slugs
+  significanceScore Int      // 1-10
+  modelUsed         String
+  generatedAt       DateTime @default(now())
+
+  change LegislationChange @relation(fields: [changeId], references: [id])
+
+  @@map("legislation_change_analyses")
 }

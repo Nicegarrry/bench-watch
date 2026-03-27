@@ -27,8 +27,11 @@ app benchWatch {
     onAuthFailedRedirectTo: "/login",
   },
   emailSender: {
-    provider: Dummy,
-    // TODO: switch to SendGrid or SMTP (Resend) before production
+    provider: SMTP,
+    defaultFrom: {
+      name: "BenchWatch",
+      email: "digest@bench.watch"
+    },
   },
   db: {
     seeds: [
@@ -116,7 +119,26 @@ page CaseAnalysisPage {
 }
 // #endregion App Pages
 
+route LegislationRoute { path: "/legislation", to: LegislationPage }
+page LegislationPage {
+  authRequired: true,
+  component: import { LegislationPage } from "@src/legislation/LegislationPage"
+}
+
 // #region Jobs
+job legislationPipelineJob {
+  executor: PgBoss,
+  perform: {
+    fn: import { runLegislationPipeline } from "@src/pipeline/legislationDiscovery"
+  },
+  schedule: {
+    cron: "0 15 * * *", // 1am AEST — runs 1h before case discovery at 16:00 UTC
+    executorOptions: {
+      pgBoss: {=json { "retryLimit": 1, "retryDelay": 300 } json=}
+    }
+  }
+}
+
 job discoveryJob {
   executor: PgBoss,
   perform: {
@@ -158,6 +180,20 @@ job digestJob {
 // #endregion Jobs
 
 // #region APIs
+api getLegislationApi {
+  fn: import { getLegislationHandler } from "@src/api/legislationApi",
+  entities: [LegislationChange, LegislationChangeAnalysis, LegislationAreaTag, UserArea],
+  auth: true,
+  httpRoute: (GET, "/api/legislation")
+}
+
+api getLegislationFeedsApi {
+  fn: import { getLegislationFeedsHandler } from "@src/api/legislationApi",
+  entities: [LegislationFeedRegistry],
+  auth: true,
+  httpRoute: (GET, "/api/legislation/feeds")
+}
+
 api runDigestApi {
   fn: import { runDigestHandler } from "@src/api/digestApi",
   entities: [User, UserDigest, UserArea],
@@ -212,6 +248,27 @@ api updateUserAreasApi {
   entities: [UserArea, User, LawArea],
   auth: true,
   httpRoute: (POST, "/api/user/areas")
+}
+
+api updateUserProfileApi {
+  fn: import { updateUserProfileHandler } from "@src/api/areasApi",
+  entities: [User],
+  auth: true,
+  httpRoute: (POST, "/api/user/profile")
+}
+
+api getNotificationsApi {
+  fn: import { getNotificationsHandler } from "@src/api/notificationsApi",
+  entities: [User, CaseAnalysis, Case],
+  auth: true,
+  httpRoute: (GET, "/api/notifications")
+}
+
+api markNotificationsSeenApi {
+  fn: import { markNotificationsSeenHandler } from "@src/api/notificationsApi",
+  entities: [User],
+  auth: true,
+  httpRoute: (POST, "/api/notifications/seen")
 }
 // #endregion APIs
 
