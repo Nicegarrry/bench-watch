@@ -371,6 +371,18 @@ cd .wasp/build/server && railway up  # deploy server to Railway
 
 ---
 
+## AI Prompt Files
+
+All prompts sent to Claude live in `src/pipeline/prompts/` — one `.ts` file per prompt.
+
+**Rules:**
+- Every new AI call gets its own file in that directory, named after its pipeline phase (e.g. `triage.ts`, `digest.ts`).
+- Each file exports a single function that accepts only the dynamic runtime values and returns the complete prompt string.
+- No prompt text goes inline in pipeline code or in `prompts.ts` — only data-formatting logic and type definitions belong there.
+- Use `.ts` files, not `.md`: Wasp bundles the server with rollup into a single JS file; plain `.md` assets are not included in the bundle and would be missing at runtime.
+
+---
+
 ## Key Decisions (Don't Revisit Without Good Reason)
 - JADE RSS for discovery (AustLII feeds are dead)
 - `www6.austlii.edu.au` for judgment text (other mirrors blocked server-side)
