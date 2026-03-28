@@ -4,9 +4,12 @@ set -e
 echo "→ Building with Wasp..."
 wasp build
 
+echo "→ Building client (Vite)..."
+REACT_APP_API_URL=https://out.fly.dev npx vite build
+
 echo "→ Copying deployment configs into build output..."
-cp railway.json .wasp/out/
-cp vercel.json .wasp/out/web-app/
+cp fly.toml .wasp/out/
+cp vercel.json .wasp/out/web-app/build/
 
 echo ""
 echo "✓ Build complete. Deploy with:"
@@ -15,7 +18,7 @@ echo "  Server (Fly.io):"
 echo "    cd .wasp/out && fly deploy"
 echo ""
 echo "  Client (Vercel):"
-echo "    vercel .wasp/out/web-app --prod"
+echo "    vercel .wasp/out/web-app/build --prod"
 echo ""
 echo "  Required Fly.io secrets (fly secrets set --app out KEY=value):"
 echo "    DATABASE_URL        — postgresql://postgres:[pass]@db.[ref].supabase.co:5432/postgres"
