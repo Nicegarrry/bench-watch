@@ -17,25 +17,32 @@ const MODEL = 'claude-sonnet-4-6'
  * L2c: Deep analysis for score 7+ changes that now have full text (one Claude call, if any).
  *
  * @param deepOnly  If true, skip L2a and only run L2c (called after text retrieval).
+ * @param limit     Max items to process in this run (for test/dev use).
  */
-export async function runLegislationAnalysis(deepOnly = false): Promise<void> {
+export async function runLegislationAnalysis(deepOnly = false, limit?: number): Promise<void> {
   const anthropic = new Anthropic({ apiKey: process.env.ANTHROPIC_API_KEY })
 
   if (!deepOnly) {
-    await runL2aTriage(anthropic)
+    await runL2aTriage(anthropic, limit)
   } else {
-    await runL2cDeepAnalysis(anthropic)
+    await runL2cDeepAnalysis(anthropic, limit)
   }
 }
 
+// Convenience wrappers for admin trigger endpoints
+export const runLegislationTriage = (limit?: number) => runLegislationAnalysis(false, limit)
+export const runLegislationDeepAnalysis = (limit?: number) => runLegislationAnalysis(true, limit)
+
 // ── L2a: Triage + summary ─────────────────────────────────────────────────
 
-async function runL2aTriage(anthropic: Anthropic): Promise<void> {
-  // Find all changes that don't yet have an analysis record
+const TRIAGE_BATCH_SIZE = 30 // ~150 tokens/item × 30 = ~4500 tokens, fits in 8192
+
+async function runL2aTriage(anthropic: Anthropic, limit?: number): Promise<void> {
+  const cap = limit ?? 150
   const unanalysed = await prisma.legislationChange.findMany({
     where: { analysis: null },
     orderBy: { publishedAt: 'desc' },
-    take: 100, // safety cap — weekly volume is ~20-50
+    take: cap,
   })
 
   if (unanalysed.length === 0) {
@@ -43,83 +50,85 @@ async function runL2aTriage(anthropic: Anthropic): Promise<void> {
     return
   }
 
-  console.log(`[legislation:L2a] Triaging ${unanalysed.length} changes in one call...`)
+  const totalBatches = Math.ceil(unanalysed.length / TRIAGE_BATCH_SIZE)
+  console.log(`[legislation:L2a] Triaging ${unanalysed.length} changes in ${totalBatches} batch(es)...`)
 
-  const items: LegislationTriageItem[] = unanalysed.map((c) => ({
-    id: c.id,
-    title: c.title,
-    jurisdiction: c.jurisdiction,
-    changeType: c.changeType,
-    feedSummary: c.feedSummary,
-  }))
+  let totalSaved = 0
 
-  const prompt = buildLegislationTriagePrompt(items)
+  for (let b = 0; b < totalBatches; b++) {
+    const slice = unanalysed.slice(b * TRIAGE_BATCH_SIZE, (b + 1) * TRIAGE_BATCH_SIZE)
+    const items: LegislationTriageItem[] = slice.map((c) => ({
+      id: c.id,
+      title: c.title,
+      jurisdiction: c.jurisdiction,
+      changeType: c.changeType,
+      feedSummary: c.feedSummary,
+    }))
 
-  let raw: string
-  try {
-    raw = await callClaude(anthropic, prompt, { maxTokens: 4096 })
-  } catch (err) {
-    console.error('[legislation:L2a] Claude call failed:', err)
-    return
-  }
+    const prompt = buildLegislationTriagePrompt(items)
 
-  let results: LegislationTriageResult[]
-  try {
-    results = JSON.parse(extractJson(raw))
-  } catch {
-    console.error('[legislation:L2a] Failed to parse Claude response:', raw.slice(0, 500))
-    return
-  }
-
-  let saved = 0
-  for (const result of results) {
+    let raw: string
     try {
-      // Upsert the analysis record
-      await prisma.legislationChangeAnalysis.upsert({
-        where: { changeId: result.id },
-        create: {
-          changeId: result.id,
-          changeSummary: result.changeSummary,
-          practiceImpact: result.practiceImpact ?? '',
-          affectedAreas: result.areaSlugs,
-          significanceScore: result.significanceScore,
-          modelUsed: MODEL,
-        },
-        update: {
-          changeSummary: result.changeSummary,
-          practiceImpact: result.practiceImpact ?? '',
-          affectedAreas: result.areaSlugs,
-          significanceScore: result.significanceScore,
-          modelUsed: MODEL,
-        },
-      })
+      raw = await callClaude(anthropic, prompt, { maxTokens: 8192 })
+    } catch (err) {
+      console.error(`[legislation:L2a] Claude call failed (batch ${b + 1}):`, err)
+      continue
+    }
 
-      // Upsert area tags
-      for (const slug of result.areaSlugs) {
-        await prisma.legislationAreaTag.upsert({
-          where: { changeId_areaSlug: { changeId: result.id, areaSlug: slug } },
+    let results: LegislationTriageResult[]
+    try {
+      results = JSON.parse(extractJson(raw))
+    } catch {
+      console.error(`[legislation:L2a] Failed to parse response (batch ${b + 1}):`, raw.slice(0, 300))
+      continue
+    }
+
+    let saved = 0
+    for (const result of results) {
+      try {
+        await prisma.legislationChangeAnalysis.upsert({
+          where: { changeId: result.id },
           create: {
             changeId: result.id,
-            areaSlug: slug,
-            relevanceConfidence: 0.8,
-            assignedBy: 'ai',
+            changeSummary: result.changeSummary,
+            practiceImpact: result.practiceImpact ?? '',
+            affectedAreas: result.areaSlugs,
+            significanceScore: result.significanceScore,
+            modelUsed: MODEL,
           },
-          update: { relevanceConfidence: 0.8 },
+          update: {
+            changeSummary: result.changeSummary,
+            practiceImpact: result.practiceImpact ?? '',
+            affectedAreas: result.areaSlugs,
+            significanceScore: result.significanceScore,
+            modelUsed: MODEL,
+          },
         })
-      }
 
-      saved++
-    } catch (err) {
-      console.error(`[legislation:L2a] Failed to save result for ${result.id}:`, err)
+        for (const slug of result.areaSlugs) {
+          await prisma.legislationAreaTag.upsert({
+            where: { changeId_areaSlug: { changeId: result.id, areaSlug: slug } },
+            create: { changeId: result.id, areaSlug: slug, relevanceConfidence: 0.8, assignedBy: 'ai' },
+            update: { relevanceConfidence: 0.8 },
+          })
+        }
+
+        saved++
+      } catch (err) {
+        console.error(`[legislation:L2a] Failed to save result for ${result.id}:`, err)
+      }
     }
+
+    console.log(`[legislation:L2a] Batch ${b + 1}/${totalBatches}: saved ${saved}/${results.length}`)
+    totalSaved += saved
   }
 
-  console.log(`[legislation:L2a] Saved ${saved}/${results.length} analyses.`)
+  console.log(`[legislation:L2a] Done. ${totalSaved} total saved.`)
 }
 
 // ── L2c: Deep analysis for 7+ items with full text ────────────────────────
 
-async function runL2cDeepAnalysis(anthropic: Anthropic): Promise<void> {
+async function runL2cDeepAnalysis(anthropic: Anthropic, limit?: number): Promise<void> {
   // Find score 7+ changes that have full text fetched but weren't deep-analysed yet
   // We detect "already deep-analysed" by checking if changeSummary is > 300 chars
   // (L2a produces short summaries; L2c produces longer refined ones)
@@ -134,10 +143,10 @@ async function runL2cDeepAnalysis(anthropic: Anthropic): Promise<void> {
     include: { analysis: true },
   })
 
-  // Filter to those where we haven't done deep analysis yet (summary still short)
-  const needsDeep = candidates.filter(
+  const allNeedingDeep = candidates.filter(
     (c) => c.analysis && c.analysis.changeSummary.length < 400
   )
+  const needsDeep = limit ? allNeedingDeep.slice(0, limit) : allNeedingDeep
 
   if (needsDeep.length === 0) {
     console.log('[legislation:L2c] No items need deep analysis.')

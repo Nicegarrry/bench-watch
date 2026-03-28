@@ -29,11 +29,31 @@ type PhaseStats = {
   p3: { usersOnboarded: number; digestsThisWeek: number; digestsPending: number }
 }
 
+type LegFeed = {
+  id: string; jurisdiction: string; jurisdictionName: string; feedUrl: string
+  feedType: string; tier: number; isActive: boolean
+  lastPolledAt: string | null; lastHttpStatus: number | null
+  itemsLastPoll: number; lastError: string | null
+}
+
+type LegStats = {
+  feeds: LegFeed[]
+  changesTotal: number
+  changesThisWeek: number
+  changesUnanalysed: number
+  analysed: number
+  highSignificance: number
+  pendingText: number
+  textFetched: number
+  readyForDeep: number
+}
+
 type AdminStatus = {
   feeds: Feed[]
   discoveryRuns: DiscoveryRun[]
   recentDigests: DigestRun[]
   phases: PhaseStats
+  legislation: LegStats
   env: { hasAnthropicKey: boolean; databaseUrl: string; nodeEnv: string }
 }
 
@@ -249,6 +269,7 @@ export function DevPage() {
     }
   }
 
+  const [legOpen, setLegOpen] = useState(true)
   const lastDiscovery = status?.discoveryRuns[0] ?? null
   const lastDigest = status?.recentDigests[0] ?? null
 
@@ -510,6 +531,212 @@ export function DevPage() {
               }
             />
           </div>
+
+          {/* ── Legislation Pipeline ── */}
+          {status.legislation && (
+            <div style={{ marginBottom: '36px' }}>
+              {/* Collapsible header */}
+              <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '12px' }}>
+                <button
+                  onClick={() => setLegOpen(o => !o)}
+                  style={{
+                    display: 'flex', alignItems: 'center', gap: '8px',
+                    background: 'none', border: 'none', cursor: 'pointer', padding: 0,
+                  }}
+                >
+                  <span style={{
+                    fontFamily: 'var(--font-mono)', fontSize: '10px', color: 'var(--on-surface-variant)',
+                    textTransform: 'uppercase', letterSpacing: '0.1em',
+                  }}>
+                    Legislation Pipeline
+                  </span>
+                  <span style={{ fontFamily: 'var(--font-mono)', fontSize: '11px', color: 'var(--on-surface-variant)' }}>
+                    {legOpen ? '▲' : '▼'}
+                  </span>
+                </button>
+                <div style={{ display: 'flex', alignItems: 'center', gap: '12px' }}>
+                  <span style={{ fontFamily: 'var(--font-mono)', fontSize: '11px', color: 'var(--on-surface-variant)' }}>
+                    {status.legislation.changesTotal} total · {status.legislation.changesThisWeek} this week · {status.legislation.highSignificance} score 7+
+                  </span>
+                  <button
+                    onClick={() => trigger('trigger-legislation')}
+                    disabled={!!triggering}
+                    style={{
+                      padding: '5px 12px', backgroundColor: '#1A1F36', color: '#C49A2B',
+                      border: '1px solid #C49A2B', borderRadius: 'var(--rounded-md)',
+                      fontFamily: 'var(--font-sans)', fontSize: '11px', fontWeight: 600,
+                      cursor: triggering ? 'not-allowed' : 'pointer',
+                      opacity: triggering && triggering !== 'trigger-legislation' ? 0.4 : 1,
+                    }}
+                  >
+                    {triggering === 'trigger-legislation' ? 'Triggered…' : 'Run Full Pipeline'}
+                  </button>
+                </div>
+              </div>
+
+              {legOpen && (
+                <>
+                  <div style={{ display: 'flex', flexDirection: 'column', gap: '12px', marginBottom: '12px' }}>
+                    {/* L1 Discovery */}
+                    <PhaseCard
+                      number="L1"
+                      label="LEGISLATION DISCOVERY"
+                      description="Poll 9 jurisdiction feeds → upsert legislation_changes"
+                      endpoint="trigger-legislation-discovery"
+                      triggering={triggering}
+                      onTrigger={trigger}
+                      stats={
+                        <>
+                          <Num n={status.legislation.changesTotal} label="total" />
+                          <Num n={status.legislation.changesThisWeek} label="this week" />
+                          <Num n={status.legislation.feeds.filter(f => f.lastHttpStatus === 200).length} label={`feeds OK / ${status.legislation.feeds.length}`} />
+                        </>
+                      }
+                    />
+
+                    {/* L2a Triage */}
+                    <PhaseCard
+                      number="L2a"
+                      label="AI TRIAGE"
+                      description="Batch → Claude significance score + area tags (one call for all items)"
+                      endpoint="trigger-legislation-triage"
+                      triggering={triggering}
+                      onTrigger={trigger}
+                      extraActions={
+                        <button
+                          onClick={() => trigger('trigger-legislation-triage?limit=5')}
+                          disabled={!!triggering}
+                          style={{
+                            padding: '6px 12px', backgroundColor: 'transparent',
+                            color: 'var(--on-surface-variant)',
+                            border: '1px solid var(--surface-dim)', borderRadius: 'var(--rounded-md)',
+                            fontFamily: 'var(--font-sans)', fontSize: '11px', fontWeight: 600,
+                            cursor: triggering ? 'not-allowed' : 'pointer',
+                            opacity: triggering && triggering !== 'trigger-legislation-triage?limit=5' ? 0.4 : 1,
+                          }}
+                        >
+                          Run 5
+                        </button>
+                      }
+                      stats={
+                        <>
+                          <Num n={status.legislation.changesUnanalysed} label="unanalysed" warn />
+                          <Num n={status.legislation.analysed} label="analysed" />
+                          <Num n={status.legislation.highSignificance} label="score 7+" />
+                        </>
+                      }
+                    />
+
+                    {/* L2b Text Retrieval */}
+                    <PhaseCard
+                      number="L2b"
+                      label="TEXT RETRIEVAL"
+                      description="Fetch full text for score 7+ changes (NSW/QLD XML; others HTML)"
+                      endpoint="trigger-legislation-text"
+                      triggering={triggering}
+                      onTrigger={trigger}
+                      extraActions={
+                        <button
+                          onClick={() => trigger('trigger-legislation-text?limit=5')}
+                          disabled={!!triggering}
+                          style={{
+                            padding: '6px 12px', backgroundColor: 'transparent',
+                            color: 'var(--on-surface-variant)',
+                            border: '1px solid var(--surface-dim)', borderRadius: 'var(--rounded-md)',
+                            fontFamily: 'var(--font-sans)', fontSize: '11px', fontWeight: 600,
+                            cursor: triggering ? 'not-allowed' : 'pointer',
+                            opacity: triggering && triggering !== 'trigger-legislation-text?limit=5' ? 0.4 : 1,
+                          }}
+                        >
+                          Run 5
+                        </button>
+                      }
+                      stats={
+                        <>
+                          <Num n={status.legislation.pendingText} label="pending fetch" warn />
+                          <Num n={status.legislation.textFetched} label="text fetched" />
+                        </>
+                      }
+                    />
+
+                    {/* L2c Deep Analysis */}
+                    <PhaseCard
+                      number="L2c"
+                      label="DEEP ANALYSIS"
+                      description="Refined AI summary + practice impact for score 7+ items with full text"
+                      endpoint="trigger-legislation-deep"
+                      triggering={triggering}
+                      onTrigger={trigger}
+                      extraActions={
+                        <button
+                          onClick={() => trigger('trigger-legislation-deep?limit=5')}
+                          disabled={!!triggering}
+                          style={{
+                            padding: '6px 12px', backgroundColor: 'transparent',
+                            color: 'var(--on-surface-variant)',
+                            border: '1px solid var(--surface-dim)', borderRadius: 'var(--rounded-md)',
+                            fontFamily: 'var(--font-sans)', fontSize: '11px', fontWeight: 600,
+                            cursor: triggering ? 'not-allowed' : 'pointer',
+                            opacity: triggering && triggering !== 'trigger-legislation-deep?limit=5' ? 0.4 : 1,
+                          }}
+                        >
+                          Run 5
+                        </button>
+                      }
+                      stats={
+                        <>
+                          <Num n={status.legislation.readyForDeep} label="ready for deep" warn />
+                          <Num n={status.legislation.highSignificance} label="score 7+" />
+                        </>
+                      }
+                    />
+                  </div>
+
+                  {/* Legislation feeds table */}
+                  <div style={{ overflowX: 'auto', border: '1px solid var(--surface-dim)', borderRadius: 'var(--rounded-md)' }}>
+                    <table style={{ width: '100%', borderCollapse: 'collapse', fontFamily: 'var(--font-sans)', fontSize: '12px' }}>
+                      <thead style={{ backgroundColor: 'var(--surface-container-low)' }}>
+                        <tr>
+                          {['T', 'Jurisdiction', 'Type', 'Last polled', 'HTTP', 'Items', 'Error'].map(h => <Th key={h}>{h}</Th>)}
+                        </tr>
+                      </thead>
+                      <tbody>
+                        {status.legislation.feeds.map((feed, i) => (
+                          <tr key={feed.id} style={{ borderTop: '1px solid var(--surface-dim)', backgroundColor: i % 2 === 1 ? 'var(--surface-container-low)' : 'transparent' }}>
+                            <Td mono>{feed.tier}</Td>
+                            <Td>
+                              <div style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
+                                {feed.lastHttpStatus === 200
+                                  ? <CheckCircle size={11} color="#059669" />
+                                  : feed.lastHttpStatus
+                                  ? <XCircle size={11} color="#B83230" />
+                                  : <Clock size={11} color="#9ca3af" />}
+                                <span style={{ fontFamily: 'var(--font-mono)', fontSize: '11px', textTransform: 'uppercase' }}>{feed.jurisdiction}</span>
+                                <span style={{ color: 'var(--on-surface-variant)' }}>{feed.jurisdictionName}</span>
+                              </div>
+                            </Td>
+                            <Td mono>{feed.feedType}</Td>
+                            <Td mono>{ago(feed.lastPolledAt)}</Td>
+                            <Td>
+                              {feed.lastHttpStatus
+                                ? <span style={{ fontFamily: 'var(--font-mono)', fontSize: '12px', color: feed.lastHttpStatus === 200 ? '#059669' : '#B83230' }}>{feed.lastHttpStatus}</span>
+                                : '—'}
+                            </Td>
+                            <Td mono>{feed.itemsLastPoll}</Td>
+                            <Td>
+                              {feed.lastError
+                                ? <span style={{ color: '#B83230', fontSize: '11px' }}>{feed.lastError.slice(0, 50)}</span>
+                                : '—'}
+                            </Td>
+                          </tr>
+                        ))}
+                      </tbody>
+                    </table>
+                  </div>
+                </>
+              )}
+            </div>
+          )}
 
           {/* ── RSS Feeds ── */}
           <section style={{ marginBottom: '32px' }}>

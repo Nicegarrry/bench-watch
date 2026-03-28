@@ -180,6 +180,41 @@ job digestJob {
 // #endregion Jobs
 
 // #region APIs
+api triggerLegislationApi {
+  fn: import { triggerLegislationHandler } from "@src/api/adminApi",
+  entities: [LegislationFeedRegistry, LegislationChange, LegislationAreaTag, LegislationChangeAnalysis],
+  auth: true,
+  httpRoute: (POST, "/api/admin/trigger-legislation")
+}
+
+api triggerLegislationDiscoveryApi {
+  fn: import { triggerLegislationDiscoveryHandler } from "@src/api/adminApi",
+  entities: [],
+  auth: true,
+  httpRoute: (POST, "/api/admin/trigger-legislation-discovery")
+}
+
+api triggerLegislationTriageApi {
+  fn: import { triggerLegislationTriageHandler } from "@src/api/adminApi",
+  entities: [],
+  auth: true,
+  httpRoute: (POST, "/api/admin/trigger-legislation-triage")
+}
+
+api triggerLegislationTextApi {
+  fn: import { triggerLegislationTextHandler } from "@src/api/adminApi",
+  entities: [],
+  auth: true,
+  httpRoute: (POST, "/api/admin/trigger-legislation-text")
+}
+
+api triggerLegislationDeepApi {
+  fn: import { triggerLegislationDeepHandler } from "@src/api/adminApi",
+  entities: [],
+  auth: true,
+  httpRoute: (POST, "/api/admin/trigger-legislation-deep")
+}
+
 api getLegislationApi {
   fn: import { getLegislationHandler } from "@src/api/legislationApi",
   entities: [LegislationChange, LegislationChangeAnalysis, LegislationAreaTag, UserArea],

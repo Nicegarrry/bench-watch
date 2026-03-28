@@ -8,7 +8,7 @@ const RATE_LIMIT_MS = 3_000
  * NSW/QLD use XML export endpoints; others use direct HTML.
  * Rate-limited at 3 seconds between requests.
  */
-export async function runLegislationTextRetrieval(): Promise<void> {
+export async function runLegislationTextRetrieval(limit?: number): Promise<void> {
   const candidates = await prisma.legislationChange.findMany({
     where: {
       textFetched: false,
@@ -17,7 +17,7 @@ export async function runLegislationTextRetrieval(): Promise<void> {
     },
     include: { analysis: true },
     orderBy: [{ analysis: { significanceScore: 'desc' } }, { publishedAt: 'desc' }],
-    take: 20,
+    take: limit ?? 20,
   })
 
   if (candidates.length === 0) {

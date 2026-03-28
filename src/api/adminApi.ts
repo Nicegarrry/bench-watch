@@ -3,6 +3,9 @@ import { HttpError } from 'wasp/server'
 import { runDiscovery, runDiscoveryAll } from '../pipeline/discovery'
 import { runTriageOnly, runTextRetrieval, runCaseAnalysis } from '../pipeline/triage'
 import { runDigests } from '../pipeline/userDigests'
+import { runLegislationPipeline, runLegislationDiscoveryOnly } from '../pipeline/legislationDiscovery'
+import { runLegislationTriage, runLegislationDeepAnalysis } from '../pipeline/legislationAnalysis'
+import { runLegislationTextRetrieval } from '../pipeline/legislationTextRetrieval'
 import { ALL_AREA_SLUGS } from '../shared/constants'
 import { buildBatchAnalysisPrompt } from '../pipeline/prompts'
 
@@ -14,32 +17,18 @@ export const getAdminStatusHandler = async (_req: any, res: any, context: any) =
 
   const weekAgo = new Date(Date.now() - WEEK_MS)
 
+  // Split into two batches to avoid exhausting the session pooler connection limit
   const [
     feeds,
     discoveryRuns,
     recentDigests,
-
-    // Phase 1
     casesTotal,
     casesThisWeek,
-
-    // Phase 2a
     casesUntriaged,
     casesTriaged,
     casesHighSignificance,
-
-    // Phase 2b
     casesNeedingExcerpt,
     casesExcerptFetched,
-
-    // Phase 2c
-    casesNeedingAnalysis,
-    casesAnalysed,
-
-    // Phase 3
-    usersOnboarded,
-    digestsThisWeek,
-    digestsPending,
   ] = await Promise.all([
     prisma.rssFeedRegistry.findMany({ orderBy: { tier: 'asc' } }),
     prisma.discoveryRun.findMany({ orderBy: { createdAt: 'desc' }, take: 8 }),
@@ -52,19 +41,13 @@ export const getAdminStatusHandler = async (_req: any, res: any, context: any) =
         modelUsed: true, tokensUsed: true,
       },
     }),
-
-    // Phase 1
     prisma.case.count(),
     prisma.case.count({ where: { createdAt: { gte: weekAgo } } }),
-
-    // Phase 2a
     prisma.case.count({ where: { caseAreaTags: { none: {} } } }),
     prisma.case.count({ where: { caseAreaTags: { some: {} } } }),
     prisma.case.count({
       where: { caseAreaTags: { some: { relevanceConfidence: { gte: 0.7 } } } },
     }),
-
-    // Phase 2b — needs excerpt but hasn't fetched it yet
     prisma.case.count({
       where: {
         excerptFetched: false,
@@ -72,17 +55,46 @@ export const getAdminStatusHandler = async (_req: any, res: any, context: any) =
       },
     }),
     prisma.case.count({ where: { excerptFetched: true } }),
+  ])
 
-    // Phase 2c — has excerpt but no analysis
-    prisma.case.count({
-      where: { excerptFetched: true, caseAnalysis: null },
-    }),
+  const [
+    casesNeedingAnalysis,
+    casesAnalysed,
+    usersOnboarded,
+    digestsThisWeek,
+    digestsPending,
+    legFeeds,
+    legChangesTotal,
+  ] = await Promise.all([
+    prisma.case.count({ where: { excerptFetched: true, caseAnalysis: null } }),
     prisma.caseAnalysis.count(),
-
-    // Phase 3
     prisma.user.count({ where: { onboarded: true, userAreas: { some: {} } } }),
     prisma.userDigest.count({ where: { createdAt: { gte: weekAgo } } }),
     prisma.userDigest.count({ where: { status: 'pending' } }),
+    prisma.legislationFeedRegistry.findMany({ orderBy: [{ tier: 'asc' }, { jurisdiction: 'asc' }] }),
+    prisma.legislationChange.count(),
+  ])
+
+  const [
+    legChangesThisWeek,
+    legChangesUnanalysed,
+    legAnalysed,
+    legHighSignificance,
+    legPendingText,
+    legTextFetched,
+    legReadyForDeep,
+  ] = await Promise.all([
+    prisma.legislationChange.count({ where: { createdAt: { gte: weekAgo } } }),
+    prisma.legislationChange.count({ where: { analysis: null } }),
+    prisma.legislationChangeAnalysis.count(),
+    prisma.legislationChangeAnalysis.count({ where: { significanceScore: { gte: 7 } } }),
+    prisma.legislationChange.count({
+      where: { textFetched: false, analysis: { significanceScore: { gte: 7 } } },
+    }),
+    prisma.legislationChange.count({ where: { textFetched: true } }),
+    prisma.legislationChange.count({
+      where: { textFetched: true, analysis: { significanceScore: { gte: 7 } } },
+    }),
   ])
 
   res.json({
@@ -95,6 +107,17 @@ export const getAdminStatusHandler = async (_req: any, res: any, context: any) =
       p2b: { casesNeedingExcerpt, casesExcerptFetched },
       p2c: { casesNeedingAnalysis, casesAnalysed },
       p3: { usersOnboarded, digestsThisWeek, digestsPending },
+    },
+    legislation: {
+      feeds: legFeeds,
+      changesTotal: legChangesTotal,
+      changesThisWeek: legChangesThisWeek,
+      changesUnanalysed: legChangesUnanalysed,
+      analysed: legAnalysed,
+      highSignificance: legHighSignificance,
+      pendingText: legPendingText,
+      textFetched: legTextFetched,
+      readyForDeep: legReadyForDeep,
     },
     env: {
       hasAnthropicKey: !!process.env.ANTHROPIC_API_KEY,
@@ -161,6 +184,66 @@ export const triggerDigestsHandler = async (_req: any, res: any, context: any) =
     console.error('[admin] Digests (3) failed:', err)
   )
   res.status(202).json({ message: 'Phase 3 Digests triggered — watch server logs' })
+}
+
+// POST /api/admin/trigger-legislation — runs the full legislation pipeline (L1→L2a→L2b→L2c)
+export const triggerLegislationHandler = async (_req: any, res: any, context: any) => {
+  if (!context.user) throw new HttpError(401)
+  runLegislationPipeline(undefined, undefined).catch((err) =>
+    console.error('[admin] Legislation pipeline failed:', err)
+  )
+  res.status(202).json({ message: 'Legislation pipeline triggered (L1→L2a→L2b→L2c) — watch server logs' })
+}
+
+// POST /api/admin/trigger-legislation-discovery (L1 only)
+export const triggerLegislationDiscoveryHandler = async (_req: any, res: any, context: any) => {
+  if (!context.user) throw new HttpError(401)
+  runLegislationDiscoveryOnly().catch((err) =>
+    console.error('[admin] Legislation discovery (L1) failed:', err)
+  )
+  res.status(202).json({ message: 'Legislation L1 Discovery triggered — watch server logs' })
+}
+
+// POST /api/admin/trigger-legislation-triage (L2a)
+// Optional query param: ?limit=N
+export const triggerLegislationTriageHandler = async (req: any, res: any, context: any) => {
+  if (!context.user) throw new HttpError(401)
+  const limit = req.query.limit ? parseInt(req.query.limit, 10) : undefined
+  runLegislationTriage(limit).catch((err) =>
+    console.error('[admin] Legislation triage (L2a) failed:', err)
+  )
+  const msg = limit
+    ? `Legislation L2a Triage triggered (top ${limit} items) — watch server logs`
+    : 'Legislation L2a Triage triggered — watch server logs'
+  res.status(202).json({ message: msg })
+}
+
+// POST /api/admin/trigger-legislation-text (L2b)
+// Optional query param: ?limit=N
+export const triggerLegislationTextHandler = async (req: any, res: any, context: any) => {
+  if (!context.user) throw new HttpError(401)
+  const limit = req.query.limit ? parseInt(req.query.limit, 10) : undefined
+  runLegislationTextRetrieval(limit).catch((err) =>
+    console.error('[admin] Legislation text retrieval (L2b) failed:', err)
+  )
+  const msg = limit
+    ? `Legislation L2b Text Retrieval triggered (top ${limit} items) — watch server logs`
+    : 'Legislation L2b Text Retrieval triggered — watch server logs'
+  res.status(202).json({ message: msg })
+}
+
+// POST /api/admin/trigger-legislation-deep (L2c)
+// Optional query param: ?limit=N
+export const triggerLegislationDeepHandler = async (req: any, res: any, context: any) => {
+  if (!context.user) throw new HttpError(401)
+  const limit = req.query.limit ? parseInt(req.query.limit, 10) : undefined
+  runLegislationDeepAnalysis(limit).catch((err) =>
+    console.error('[admin] Legislation deep analysis (L2c) failed:', err)
+  )
+  const msg = limit
+    ? `Legislation L2c Deep Analysis triggered (top ${limit} items) — watch server logs`
+    : 'Legislation L2c Deep Analysis triggered — watch server logs'
+  res.status(202).json({ message: msg })
 }
 
 // POST /api/admin/setup-test-user

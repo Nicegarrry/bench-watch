@@ -19,6 +19,13 @@ type RawLegChange = {
   source: string
 }
 
+// ── Dev/admin: run only Phase L1 discovery ─────────────────────────────────
+export const runLegislationDiscoveryOnly = async (_args?: unknown, _context?: unknown): Promise<void> => {
+  const since = new Date(Date.now() - 8 * 24 * 60 * 60 * 1000)
+  const count = await runLegislationDiscovery(since)
+  console.log(`[legislation:L1] Standalone run complete. ${count} new changes.`)
+}
+
 // ── Main job handler (called by Wasp PgBoss job) ───────────────────────────
 
 export const runLegislationPipeline = async (_args: unknown, _context: unknown): Promise<void> => {
