@@ -7,7 +7,7 @@ It monitors every major Australian appellate court, discovers new decisions via 
 uses AI to identify the most significant ones, generates case analyses, and delivers
 personalised digests to users based on their chosen areas of law.
 
-**Stack:** Wasp 0.21 · Postgres (Supabase prod / Docker local) · Railway (server) · Vercel (client SPA) · Stripe · Resend (email)
+**Stack:** Wasp 0.21 · Postgres (Supabase prod / Docker local) · Fly.io (server) · Vercel (client SPA) · Stripe · Resend (email)
 
 **Lovable prototype exists** for user testing only — this is the real build. Don't
 reference or mirror the Lovable codebase.
@@ -341,32 +341,33 @@ use this layout. Landing and auth pages are full-width only.
 **NOT Vercel serverless** — Wasp uses PgBoss (job queue) which requires a persistent
 Node.js process. Vercel serverless functions can't run persistent background workers.
 
-**Server → Railway** (or Fly.io): The Wasp Express server runs as a persistent process.
-PgBoss is embedded in the server and handles the Sunday cron pipeline.
+**Server → Fly.io**: The Wasp Express server runs as a persistent process via Docker.
+PgBoss is embedded in the server and handles the cron pipeline. App name: `out` (URL: `https://out.fly.dev`).
 
-**Client → Vercel** (or Netlify): After `wasp build`, the static React SPA in
-`.wasp/build/web-app/` can be hosted on Vercel as a static site (no server needed).
+**Client → Vercel**: After `wasp build`, the static React SPA in
+`.wasp/out/web-app/` is deployed to Vercel as a static site (no server needed).
 
-**Deployment steps (when ready):**
+**Deployment steps:**
 ```bash
-wasp build                          # generates .wasp/build/server/ + web-app/
-cd .wasp/build/server && railway up  # deploy server to Railway
-# deploy .wasp/build/web-app/ to Vercel as static site
+./deploy.sh                         # runs wasp build + copies configs
+cd .wasp/out && fly deploy          # deploy server to Fly.io (uses Dockerfile)
+vercel .wasp/out/web-app --prod     # deploy client to Vercel
 ```
 
-**Env vars needed on Railway:** `DATABASE_URL`, `ANTHROPIC_API_KEY`, `WASP_SERVER_URL`,
-`WASP_WEB_CLIENT_URL`, `JWT_SECRET`
+**Env vars needed on Fly.io** (set via `fly secrets set --app out KEY=value`):
+`DATABASE_URL`, `ANTHROPIC_API_KEY`, `SMTP_HOST`, `SMTP_PORT`, `SMTP_USERNAME`,
+`SMTP_PASSWORD`, `WASP_SERVER_URL`, `WASP_WEB_CLIENT_URL`, `JWT_SECRET`
 
-**Dev:** `wasp start db` for Docker Postgres + `wasp start` for app. Docker is now available on this machine (previously wasn't on macOS 12).
+**Dev:** `wasp start db` for Docker Postgres + `wasp start` for app.
 
-### Pre-Deployment Checklist (Before Railway Deploy)
+### Pre-Deployment Checklist (Before Fly.io Deploy)
 
-1. **DATABASE_URL on Railway** — use Supabase **direct connection URL** (`postgresql://postgres:[pass]@db.[ref].supabase.co:5432/postgres`), not the pooler. Server-to-server from Railway works fine without pgbouncer. Do NOT set `PG_BOSS_NEW_OPTIONS` on Railway — pg-boss and Prisma can both use the direct URL without special handling.
-2. **Remove `?pgbouncer=true`** from `DATABASE_URL` on Railway — not needed for direct connections.
-3. **Switch email provider** from `Dummy` to Resend in `main.wasp` and add `RESEND_API_KEY` to Railway env vars.
+1. **DATABASE_URL on Fly.io** — use Supabase **direct connection URL** (`postgresql://postgres:[pass]@db.[ref].supabase.co:5432/postgres`), not the pooler. Do NOT set `PG_BOSS_NEW_OPTIONS` on Fly.io — pg-boss and Prisma can both use the direct URL without special handling.
+2. **Remove `?pgbouncer=true`** from `DATABASE_URL` on Fly.io — not needed for direct connections.
+3. **SMTP vars** — `SMTP_HOST=smtp.resend.com`, `SMTP_PORT=587`, `SMTP_USERNAME=resend`, `SMTP_PASSWORD=<resend api key>`.
 4. **Add `STRIPE_SECRET_KEY`** and `STRIPE_WEBHOOK_SECRET` when Stripe is wired up.
 5. **`JWT_SECRET`** — generate a strong random value (`openssl rand -hex 32`).
-6. **`WASP_SERVER_URL`** — set to the Railway app URL (e.g. `https://bench-watch.up.railway.app`).
+6. **`WASP_SERVER_URL`** — `https://out.fly.dev`.
 7. **`WASP_WEB_CLIENT_URL`** — set to the Vercel client URL.
 
 ---
