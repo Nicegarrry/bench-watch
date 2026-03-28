@@ -5,17 +5,17 @@ echo "→ Building with Wasp..."
 wasp build
 
 echo "→ Copying deployment configs into build output..."
-cp railway.json .wasp/build/server/
-cp vercel.json .wasp/build/web-app/
+cp railway.json .wasp/out/server/
+cp vercel.json .wasp/out/web-app/
 
 echo ""
 echo "✓ Build complete. Deploy with:"
 echo ""
 echo "  Server (Railway):"
-echo "    cd .wasp/build/server && railway up"
+echo "    cd .wasp/out/server && railway up"
 echo ""
 echo "  Client (Vercel):"
-echo "    vercel .wasp/build/web-app --prod"
+echo "    vercel .wasp/out/web-app --prod"
 echo ""
 echo "  Required Railway env vars (set before first deploy):"
 echo "    DATABASE_URL        — postgresql://postgres:[pass]@db.[ref].supabase.co:5432/postgres"
